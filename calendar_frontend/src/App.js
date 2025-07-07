@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
+import RegisterForm from "./RegisterForm";
 
 /** 
  * PUBLIC_INTERFACE
@@ -63,15 +64,48 @@ function AuthProvider({ children }) {
    */
   const [user, setUser] = useState(null);
 
-  // Simulated login
-  const login = (email, password) => {
-    // TODO: replace with backend call
-    setUser({ email });
+  // Backend API Base
+  const API_BASE =
+    process.env.REACT_APP_API_URL ||
+    "https://vscode-internal-149548-beta.beta01.cloud.kavia.ai:3001";
+
+  /** PUBLIC_INTERFACE */
+  const login = async (email, password) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: email, password }),
+      });
+      if (!res.ok) throw new Error("Invalid credentials");
+      setUser({ email });
+    } catch (err) {
+      throw err;
+    }
   };
+
+  /** PUBLIC_INTERFACE */
   const logout = () => setUser(null);
 
+  /** PUBLIC_INTERFACE */
+  const register = async (email, password) => {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username: email, password }),
+    });
+    if (res.ok) return true;
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(
+      errData?.detail ||
+        "Registration failed. Please try again with a different email."
+    );
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );
@@ -94,17 +128,22 @@ function Modal({ children, open, onClose }) {
 // --- Authentication Forms ---
 
 // PUBLIC_INTERFACE
-function LoginForm({ onLogin }) {
-  const [email, setEmail] = useState(""); 
+function LoginForm({ onLogin, onSwitchToRegister }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = e => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    // TODO: Add form validation and backend error propagation.
     if (email && password) {
-      onLogin(email, password);
+      try {
+        await onLogin(email, password);
+      } catch (err) {
+        setError(
+          err?.message || "Login error. Please check credentials and try again."
+        );
+      }
     } else {
       setError("Email and password required");
     }
@@ -114,14 +153,42 @@ function LoginForm({ onLogin }) {
       <h2>Login</h2>
       <label>
         Email
-        <input type="email" value={email} autoComplete="username" onChange={e => setEmail(e.target.value)} />
+        <input
+          type="email"
+          value={email}
+          autoComplete="username"
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
       </label>
       <label>
         Password
-        <input type="password" value={password} autoComplete="current-password" onChange={e => setPassword(e.target.value)} />
+        <input
+          type="password"
+          value={password}
+          autoComplete="current-password"
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
       </label>
       {error && <div className="auth-error">{error}</div>}
-      <button type="submit" className="btn-primary">Login</button>
+      <button type="submit" className="btn-primary">
+        Login
+      </button>
+      <button
+        type="button"
+        style={{
+          marginTop: "0.7em",
+          background: "none",
+          border: "none",
+          color: "#1976d2",
+          textDecoration: "underline",
+          cursor: "pointer",
+        }}
+        onClick={onSwitchToRegister}
+      >
+        Register a new account
+      </button>
     </form>
   );
 }
@@ -333,7 +400,8 @@ function App() {
   }, [theme]);
 
   // AUTH
-  const { user, login, logout } = React.useContext(AuthContext);
+  const { user, login, logout, register } = React.useContext(AuthContext);
+  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
 
   // CALENDAR VIEW
   const today = new Date();
@@ -433,10 +501,20 @@ function App() {
   // --- UI ---
 
   if (!user) {
-    // Show login only if not authenticated
+    // Show login/register screens
     return (
       <div className="auth-screen">
-        <LoginForm onLogin={login} />
+        {authMode === "login" ? (
+          <LoginForm
+            onLogin={login}
+            onSwitchToRegister={() => setAuthMode("register")}
+          />
+        ) : (
+          <RegisterForm
+            onRegister={register}
+            onSwitchToLogin={() => setAuthMode("login")}
+          />
+        )}
       </div>
     );
   }
