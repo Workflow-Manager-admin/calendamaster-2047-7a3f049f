@@ -944,7 +944,7 @@ function App() {
           checkedCalendarIds={checkedCalendarIds}
           onToggleCalendar={handleToggleCalendar}
         />
-        <main style={{ flex: 1, minWidth: 0, background: "var(--main-bg)" }}>
+        <main style={{ flex: 1, minWidth: 0, background: "var(--main-bg)", position: "relative" }}>
           {/* Week navigation */}
           <div style={{ display: "flex", alignItems: "center", padding: "18px 0 7px 6px", gap: "17px", marginBottom: 10 }}>
             <button aria-label="Previous week" onClick={() => shiftWeek(-1)} style={{
@@ -1011,6 +1011,42 @@ function App() {
               }
             }}
           />
+          {/* Floating Action Button for adding events/appointments/meetings */}
+          <button
+            className="calendar-fab"
+            aria-label="Add event, appointment, or meeting"
+            title="Create new event/appointment"
+            onClick={() => setModalState({
+              open: true,
+              event: null,
+              mode: "add",
+              slotStart: "",
+              slotEnd: ""
+            })}
+            tabIndex={0}
+            style={{
+              position: "fixed",
+              right: 38,
+              bottom: 38,
+              width: 62,
+              height: 62,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #176cae 70%, #9858A9 100%)",
+              color: "#fff",
+              fontSize: "2.6em",
+              fontWeight: 900,
+              border: "none",
+              boxShadow: "0 6px 22px #176cae33, 0 2.6px 9px 0 #9858a91d",
+              zIndex: 99,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "background 0.18s, box-shadow 0.16s"
+            }}
+          >
+            <span style={{marginTop: -1, marginLeft: 0}}>+</span>
+          </button>
         </main>
       </div>
       {/* Event/Appointment modal (create or edit) */}

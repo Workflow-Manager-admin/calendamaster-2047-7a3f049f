@@ -506,3 +506,40 @@ body, #root {
   .modal-content, .auth-form {padding: 1em 0.2em;}
   .weekview-root {padding: 1px;}
 }
+
+/* Floating Action Button for Add Event/Appointment (FAB) */
+.calendar-fab {
+  position: fixed !important;
+  right: 38px;
+  bottom: 38px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #176cae 70%, #9858A9 100%);
+  color: #fff;
+  font-size: 2.6em;
+  font-weight: 900;
+  border: none;
+  box-shadow: 0 6px 22px #176cae33, 0 2.6px 9px 0 #9858a91d;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s, box-shadow 0.16s;
+}
+.calendar-fab:focus-visible,
+.calendar-fab:hover {
+  background: linear-gradient(110deg, #9858A9 70%, #176cae 100%);
+  box-shadow: 0 7px 26px #9858a966, 0 2.6px 9px 0 #176cae23;
+  outline: 2.5px solid #F3E46D;
+}
+@media (max-width: 700px) {
+  .calendar-fab {
+    right: 18px;
+    bottom: 18px;
+    width: 50px;
+    height: 50px;
+    font-size: 2.08em;
+  }
+}
