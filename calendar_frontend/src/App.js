@@ -875,9 +875,17 @@ function App() {
       return;
     }
     try {
+      // Add authorization header if token exists
+      let headers = {};
+      const token = localStorage.getItem("token");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(
         `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`,
         {
+          headers,
           credentials:
             API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
               ? "same-origin"
@@ -889,35 +897,48 @@ function App() {
       const filtered = (data || []).filter(e => checkedCalendarIds.includes(e.calendar_id));
       setEvents(filtered.map(mapApiEventToFrontend));
     } catch (err) {
+      console.warn("Failed to fetch events from backend:", err.message);
       setEvents([]);
     }
   }
 
   // Fetch events for current week when curWeekStart, checkedCalendarIds, or user changes
   useEffect(() => {
-    refetchCurrentWeekEvents();
+    if (user) {
+      refetchCurrentWeekEvents().finally(() => {
+        setHasAttemptedFetch(true);
+      });
+    } else {
+      setHasAttemptedFetch(false);
+    }
     // eslint-disable-next-line
   }, [curWeekStart, checkedCalendarIds, user]); // refresh when week/calendars/user changes
 
-  // Inject dummy events if needed after fetching
+  // State to track whether we've attempted to fetch real events
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+
+  // Inject dummy events only when explicitly needed
   useEffect(() => {
-    // Only inject when:
-    // 1. Explicit dev flag is set, or
-    // 2. Event list is empty (no backend events found for view)
+    // Only inject dummy events when:
+    // 1. Explicit dev flag is set, OR
+    // 2. We have attempted fetch, no real events exist, and user is logged in
     if (
       user &&
       calendars.length &&
-      (DEV_SEED_DUMMY_EVENTS || events.length === 0)
+      (DEV_SEED_DUMMY_EVENTS || (hasAttemptedFetch && events.length === 0))
     ) {
-      // Defensive: Only overwrite if event list is empty or dev flag enabled
-      setEvents((evlist) => {
-        if (!DEV_SEED_DUMMY_EVENTS && evlist.length) return evlist;
-        return buildDummyEventsForWeek(curWeekStart, calendars);
-      });
+      // Only set dummy events if we don't already have real events (prevent overwriting)
+      if (DEV_SEED_DUMMY_EVENTS || events.length === 0) {
+        const dummyEvents = buildDummyEventsForWeek(curWeekStart, calendars);
+        // Filter dummy events to only show ones for checked calendars
+        const filteredDummyEvents = dummyEvents.filter(e => 
+          checkedCalendarIds.includes(e.calendar_id)
+        );
+        setEvents(filteredDummyEvents);
+      }
     }
-    // Only fires if calendars, events, user, curWeekStart change
     // eslint-disable-next-line
-  }, [user, events.length, calendars, curWeekStart]);
+  }, [user, hasAttemptedFetch, calendars, curWeekStart, checkedCalendarIds]);
 
   // Auth overlays
   if (!user) {
@@ -1036,35 +1057,50 @@ function App() {
     if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
       // PATCH to /events/{event_id}
       try {
+        const token = localStorage.getItem("token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        
+        // For PATCH, we need all required fields per backend schema
+        const patchPayload = {
+          title: eventPayload.title,
+          description: eventPayload.description,
+          start_datetime: eventPayload.start_datetime,
+          end_datetime: eventPayload.end_datetime,
+          color: eventPayload.color,
+          is_appointment: eventPayload.is_appointment
+        };
+        
         const res = await fetch(`${API_BASE}/events/${modalState.event.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers,
           credentials:
             API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
               ? "same-origin"
               : "include",
-          body: JSON.stringify(eventPayload)
+          body: JSON.stringify(patchPayload)
         });
-        if (!res.ok) throw new Error("Event update failed");
-        // Refetch events after update
-        setTimeout(() => {
-          setCurWeekStart(s => s);
-        }, 0);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error("Event update failed: " + (errorData?.detail || res.status));
+        }
+        
+        // Refetch events after successful update
+        await refetchCurrentWeekEvents();
       } catch (err) {
-        // Optionally show error to user
+        console.error("[EventUpdate] Failed to update event:", err?.message || err);
+        // Don't close modal on error - let user retry
+        return;
       }
     } else {
       // POST new event to /events/
       try {
-        // Attempt to read token from localStorage for Authorization header
-        let token = null;
-        try {
-          token = localStorage.getItem("token");
-        } catch (e) {}
-        // Show full request/response debug for troubleshooting
-        console.log('[EventCreate] About to POST event:', eventPayload, "(token:", token, ")");
+        const token = localStorage.getItem("token");
         const headers = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
+        
+        console.log('[EventCreate] About to POST event:', eventPayload);
         const res = await fetch(`${API_BASE}/events/`, {
           method: "POST",
           headers,
@@ -1074,24 +1110,33 @@ function App() {
               : "include",
           body: JSON.stringify(eventPayload)
         });
+        
         let respBody;
-        try { respBody = await res.json(); } catch (e) { respBody = null; }
-        console.log('[EventCreate] Response status:', res.status, ', body:', respBody);
-        if (!res.ok) {
-          if (respBody && respBody.detail) console.error('[EventCreate] Error:', respBody.detail);
-          throw new Error("Event create failed: " + (respBody?.detail || res.status));
+        try { 
+          respBody = await res.json(); 
+        } catch (e) { 
+          respBody = null; 
         }
-        // Await backend response before refreshing event list
-        // ensure create fully completes
+        
+        console.log('[EventCreate] Response status:', res.status, ', body:', respBody);
+        
+        if (!res.ok) {
+          const errorDetail = respBody?.detail || `HTTP ${res.status}`;
+          console.error('[EventCreate] Error:', errorDetail);
+          throw new Error("Event create failed: " + errorDetail);
+        }
 
-        // Robust fix: Refetch events and update the list BEFORE closing modal
-        // This prevents a race condition where modal closes before new event appears
-        await refetchCurrentWeekEvents(); // custom async function, see below
+        // Successful creation - refetch events to update UI
+        await refetchCurrentWeekEvents();
+        console.log('[EventCreate] Event created successfully, events refetched');
       } catch (err) {
-        // Optionally show error to user
         console.error("[EventCreate] Failed to create event:", err?.message || err);
+        // Don't close modal on error - let user retry
+        return;
       }
     }
+    
+    // Only close modal after successful operation
     setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
   };
 
@@ -1172,25 +1217,49 @@ function App() {
               ...categoryColors    // { [category_name]: color }
             }}
             onEventUpdate={async (eventId, updateObj) => {
-              // PATCH to backend, update times only
+              // PATCH to backend with full event data to meet schema requirements
               try {
-                await fetch(`${API_BASE}/events/${eventId}`, {
+                const token = localStorage.getItem("token");
+                const headers = { "Content-Type": "application/json" };
+                if (token) headers["Authorization"] = `Bearer ${token}`;
+                
+                // Find the current event to get existing data
+                const currentEvent = events.find(e => e.id === eventId);
+                if (!currentEvent) {
+                  console.error("Cannot update event: event not found");
+                  return;
+                }
+                
+                // Build complete patch payload with all required fields
+                const patchPayload = {
+                  title: currentEvent.title,
+                  description: currentEvent.description || "",
+                  start_datetime: updateObj.start,
+                  end_datetime: updateObj.end,
+                  color: currentEvent.color || calendars.find(c => c.id === currentEvent.calendar_id)?.color,
+                  is_appointment: currentEvent.is_appointment || false
+                };
+                
+                const res = await fetch(`${API_BASE}/events/${eventId}`, {
                   method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
+                  headers,
                   credentials:
                     API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
                       ? "same-origin"
                       : "include",
-                  body: JSON.stringify({
-                    start_datetime: updateObj.start,
-                    end_datetime: updateObj.end,
-                    // Also must send all required update fields, so fetch the event to merge fields if needed
-                    // Here we fetch the event for full data, then PATCH with merged values for all required fields
-                  })
+                  body: JSON.stringify(patchPayload)
                 });
-                setTimeout(() => setCurWeekStart(s => s), 0);
+                
+                if (!res.ok) {
+                  const errorData = await res.json().catch(() => ({}));
+                  console.error("Event update failed:", errorData?.detail || res.status);
+                  return;
+                }
+                
+                // Refetch events after successful update
+                await refetchCurrentWeekEvents();
               } catch (err) {
-                // handle error silently (optionally notify user)
+                console.error("Failed to update event:", err?.message || err);
               }
             }}
           />

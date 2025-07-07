@@ -24,7 +24,16 @@ const timeLabels = (startHour = 7, endHour = 20) => {
 
 function eventsForDay(events, day) {
   // Returns events whose start falls on this day
-  return events.filter(e => e.start.slice(0, 10) === day.date);
+  // Filter out events without proper date format to prevent errors
+  return events.filter(e => {
+    if (!e.start || typeof e.start !== 'string') return false;
+    try {
+      return e.start.slice(0, 10) === day.date;
+    } catch (err) {
+      console.warn("Invalid event date format:", e);
+      return false;
+    }
+  });
 }
 
 function getTimeSlot(date, hour, min) {
@@ -33,12 +42,27 @@ function getTimeSlot(date, hour, min) {
 
 function getPosForEvent(event, startHour) {
   // Returns [rowIndex, rowSpan] for positioning; assumes local time
-  const start = new Date(event.start);
-  const end = new Date(event.end);
-  const startIdx = (start.getHours() - startHour) * 2 + (start.getMinutes() >= 30 ? 1 : 0);
-  let endIdx = (end.getHours() - startHour) * 2 + (end.getMinutes() > 0 ? 1 : 0);
-  if (endIdx < startIdx) endIdx = startIdx + 1;
-  return [startIdx, Math.max(1, endIdx - startIdx)];
+  try {
+    const start = new Date(event.start);
+    const end = new Date(event.end);
+    
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn("Invalid event dates:", event);
+      return [0, 1]; // Default position
+    }
+    
+    const startIdx = Math.max(0, (start.getHours() - startHour) * 2 + (start.getMinutes() >= 30 ? 1 : 0));
+    let endIdx = Math.max(0, (end.getHours() - startHour) * 2 + (end.getMinutes() > 0 ? 1 : 0));
+    
+    // Ensure end is after start
+    if (endIdx <= startIdx) endIdx = startIdx + 1;
+    
+    return [startIdx, Math.max(1, endIdx - startIdx)];
+  } catch (err) {
+    console.warn("Error calculating event position:", err, event);
+    return [0, 1]; // Default position
+  }
 }
 
 /**
