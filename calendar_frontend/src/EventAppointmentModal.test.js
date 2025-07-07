@@ -55,32 +55,6 @@ describe('EventAppointmentModal', () => {
     
     render(<EventAppointmentModal {...propsWithoutDefaults} />);
     
-    // The create button should be disabled initially when form is invalid
-    const createButton = screen.getByRole('button', { name: /create/i });
-    expect(createButton).toBeDisabled();
-    
-    // Try to submit the form by triggering form submission directly
-    const form = screen.getByRole('form');
-    fireEvent.submit(form);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Title is required')).toBeInTheDocument();
-      expect(screen.getByText('Start time is required')).toBeInTheDocument();
-      expect(screen.getByText('End time is required')).toBeInTheDocument();
-    }, { timeout: 1000 });
-  });
-=======
-
-  test('displays validation errors for required fields', async () => {
-    // Start with a modal that has no default values to ensure validation kicks in
-    const propsWithoutDefaults = {
-      ...defaultProps,
-      defaultStart: '',
-      defaultEnd: ''
-    };
-    
-    render(<EventAppointmentModal {...propsWithoutDefaults} />);
-    
     // Clear the title field to trigger validation
     const titleInput = screen.getByLabelText(/title/i);
     fireEvent.change(titleInput, { target: { value: '' } });

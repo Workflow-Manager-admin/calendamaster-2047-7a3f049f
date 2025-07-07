@@ -873,34 +873,53 @@ function App() {
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const day = d.getDate();
+    
+    console.log(`[EventFetch] Fetching events for week starting ${curWeekStart} (${year}-${month}-${day})`);
+    
     if (!checkedCalendarIds.length || !user) {
+      console.log(`[EventFetch] Skipping fetch: ${!user ? 'no user' : 'no calendars selected'}`);
       setEvents([]);
       return;
     }
+    
     try {
       // Add authorization header if token exists
       let headers = {};
       const token = localStorage.getItem("token");
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
+        console.log(`[EventFetch] Using auth token for request`);
+      } else {
+        console.warn(`[EventFetch] No auth token found`);
       }
       
-      const res = await fetch(
-        `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`,
-        {
-          headers,
-          credentials:
-            API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
-              ? "same-origin"
-              : "include",
-        }
-      );
-      if (!res.ok) throw new Error("Failed to fetch events");
+      const url = `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`;
+      console.log(`[EventFetch] Requesting: ${url}`);
+      
+      const res = await fetch(url, {
+        headers,
+        credentials:
+          API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+            ? "same-origin"
+            : "include",
+      });
+      
+      console.log(`[EventFetch] Response status: ${res.status}`);
+      
+      if (!res.ok) throw new Error(`Failed to fetch events: HTTP ${res.status}`);
       const data = await res.json();
+      console.log(`[EventFetch] Received ${data?.length || 0} events from backend`);
+      
       const filtered = (data || []).filter(e => checkedCalendarIds.includes(e.calendar_id));
-      setEvents(filtered.map(mapApiEventToFrontend));
+      console.log(`[EventFetch] Filtered to ${filtered.length} events for selected calendars:`, checkedCalendarIds);
+      
+      const mappedEvents = filtered.map(mapApiEventToFrontend);
+      setEvents(mappedEvents);
+      
+      console.log(`[EventFetch] Successfully loaded ${mappedEvents.length} events for week view`);
     } catch (err) {
-      console.warn("Failed to fetch events from backend:", err.message);
+      console.error("[EventFetch] Failed to fetch events from backend:", err.message);
+      showNotification("Failed to load events. Using sample data.", "error", 4000);
       setEvents([]);
     }
   }
@@ -920,52 +939,63 @@ function App() {
   // State to track whether we've attempted to fetch real events
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
-  // Inject dummy events only when explicitly needed and within valid week bounds
+  // Inject dummy events only when no real events exist and within valid week bounds
   useEffect(() => {
     // Only inject dummy events when:
-    // 1. Explicit dev flag is set, OR
-    // 2. We have attempted fetch, no real events exist, and user is logged in
+    // 1. User is logged in AND
+    // 2. We have attempted to fetch real events AND
+    // 3. No real events exist (empty calendar) AND
+    // 4. Not currently in dev mode with explicit dummy events
     if (
       user &&
       calendars.length &&
-      (DEV_SEED_DUMMY_EVENTS || (hasAttemptedFetch && events.length === 0))
+      hasAttemptedFetch &&
+      events.length === 0 &&
+      !DEV_SEED_DUMMY_EVENTS
     ) {
-      // Only set dummy events if we don't already have real events (prevent overwriting)
-      if (DEV_SEED_DUMMY_EVENTS || events.length === 0) {
-        const dummyEvents = buildDummyEventsForWeek(curWeekStart, calendars);
+      console.log(`[DummyEvents] No real events found, showing sample events for empty calendar`);
+      const dummyEvents = buildDummyEventsForWeek(curWeekStart, calendars);
+      
+      // Filter dummy events to:
+      // 1. Only show ones for checked calendars
+      // 2. Only show events that fall within the current week view (valid grid bounds)
+      // 3. Ensure event times are within valid display hours (7 AM to 8 PM)
+      // 4. Never show outside the week grid or as duplicates
+      const currentWeekStart = new Date(curWeekStart);
+      const currentWeekEnd = new Date(currentWeekStart);
+      currentWeekEnd.setDate(currentWeekEnd.getDate() + 6); // End of week (Sunday)
+      
+      const filteredDummyEvents = dummyEvents.filter(e => {
+        // Check if calendar is selected
+        if (!checkedCalendarIds.includes(e.calendar_id)) return false;
         
-        // Filter dummy events to:
-        // 1. Only show ones for checked calendars
-        // 2. Only show events that fall within the current week view (valid grid bounds)
-        // 3. Ensure event times are within valid display hours (7 AM to 8 PM)
-        const currentWeekStart = new Date(curWeekStart);
-        const currentWeekEnd = new Date(currentWeekStart);
-        currentWeekEnd.setDate(currentWeekEnd.getDate() + 6); // End of week (Sunday)
+        // Check if event falls within current week bounds
+        const eventStart = new Date(e.start);
+        const eventDate = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
         
-        const filteredDummyEvents = dummyEvents.filter(e => {
-          // Check if calendar is selected
-          if (!checkedCalendarIds.includes(e.calendar_id)) return false;
-          
-          // Check if event falls within current week bounds
-          const eventStart = new Date(e.start);
-          const eventDate = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
-          
-          if (eventDate < currentWeekStart || eventDate > currentWeekEnd) return false;
-          
-          // Check if event times are within display bounds (7 AM to 8 PM)
-          const eventStartHour = eventStart.getHours();
-          const eventEnd = new Date(e.end);
-          const eventEndHour = eventEnd.getHours();
-          
-          // Only show events that have at least some portion within display hours
-          if (eventEndHour < 7 || eventStartHour > 20) return false;
-          
-          return true;
-        });
+        if (eventDate < currentWeekStart || eventDate > currentWeekEnd) return false;
         
-        console.log(`[DummyEvents] Showing ${filteredDummyEvents.length} dummy events for week ${curWeekStart}`);
-        setEvents(filteredDummyEvents);
-      }
+        // Check if event times are within display bounds (7 AM to 8 PM)
+        const eventStartHour = eventStart.getHours();
+        const eventEnd = new Date(e.end);
+        const eventEndHour = eventEnd.getHours();
+        
+        // Only show events that have at least some portion within display hours
+        if (eventEndHour < 7 || eventStartHour > 20) return false;
+        
+        return true;
+      });
+      
+      console.log(`[DummyEvents] Filtered to ${filteredDummyEvents.length} valid dummy events within week ${curWeekStart}`);
+      setEvents(filteredDummyEvents);
+    } else if (DEV_SEED_DUMMY_EVENTS && user && calendars.length) {
+      // Development mode: always show dummy events
+      console.log(`[DummyEvents] Dev mode: showing dummy events for week ${curWeekStart}`);
+      const dummyEvents = buildDummyEventsForWeek(curWeekStart, calendars);
+      const filteredDummyEvents = dummyEvents.filter(e => 
+        checkedCalendarIds.includes(e.calendar_id)
+      );
+      setEvents(filteredDummyEvents);
     }
     // eslint-disable-next-line
   }, [user, hasAttemptedFetch, calendars, curWeekStart, checkedCalendarIds]);
@@ -1042,9 +1072,10 @@ function App() {
   const handleSaveEvent = async (evtData) => {
     /**
      * Compose and submit an event/meeting/appointment to backend.
-     * Fix: Map modal's 'categoryId' or 'calendar_id' robustly, and pass correct fields.
-     * Always use category/calendar id coming out of modal (can be under evtData.categoryId or evtData.calendar_id).
+     * Enhanced with comprehensive logging and error handling.
      */
+    console.log('[EventSave] Starting event save operation:', { mode: modalState.mode, eventData: evtData });
+    
     // Accept both possible property names
     const calendar_id =
       evtData.calendar_id !== undefined
@@ -1053,13 +1084,15 @@ function App() {
         ? parseInt(evtData.categoryId, 10)
         : undefined;
 
-    // Make sure to map 'isAppointment' (used in EventAppointmentModal) into is_appointment payload, and ensure field is boolean.
+    // Make sure to map 'isAppointment' (used in EventAppointmentModal) into is_appointment payload
     const is_appointment =
       evtData.is_appointment !== undefined
         ? !!evtData.is_appointment
         : evtData.isAppointment !== undefined
         ? !!evtData.isAppointment
         : false;
+
+    console.log('[EventSave] Mapped fields:', { calendar_id, is_appointment });
 
     // Compose payload for backend (add/edit logic)
     const eventPayload = {
@@ -1086,17 +1119,35 @@ function App() {
       delete eventPayload.invitees;
     }
 
+    console.log('[EventSave] Final payload:', eventPayload);
+
+    // Validation
     if (!eventPayload.title || !eventPayload.start_datetime || !eventPayload.end_datetime || !eventPayload.calendar_id) {
-      // Required fields check - throw error instead of silently failing
-      throw new Error("Missing required fields: title, start time, end time, and category are required");
+      const missingFields = [];
+      if (!eventPayload.title) missingFields.push('title');
+      if (!eventPayload.start_datetime) missingFields.push('start time');
+      if (!eventPayload.end_datetime) missingFields.push('end time');
+      if (!eventPayload.calendar_id) missingFields.push('category');
+      
+      const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
+      console.error('[EventSave] Validation failed:', errorMsg);
+      showNotification(errorMsg, "error");
+      throw new Error(errorMsg);
     }
 
     if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
       // PATCH to /events/{event_id}
+      console.log('[EventUpdate] Starting update for event ID:', modalState.event.id);
+      
       try {
         const token = localStorage.getItem("token");
         const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          console.log('[EventUpdate] Using auth token');
+        } else {
+          console.warn('[EventUpdate] No auth token available');
+        }
         
         // For PATCH, we need all required fields per backend schema
         const patchPayload = {
@@ -1108,9 +1159,12 @@ function App() {
           is_appointment: eventPayload.is_appointment
         };
         
-        console.log('[EventUpdate] Updating event:', modalState.event.id, 'with payload:', patchPayload);
+        console.log('[EventUpdate] PATCH payload:', patchPayload);
         
-        const res = await fetch(`${API_BASE}/events/${modalState.event.id}`, {
+        const url = `${API_BASE}/events/${modalState.event.id}`;
+        console.log('[EventUpdate] Sending PATCH to:', url);
+        
+        const res = await fetch(url, {
           method: "PATCH",
           headers,
           credentials:
@@ -1120,33 +1174,49 @@ function App() {
           body: JSON.stringify(patchPayload)
         });
         
+        console.log('[EventUpdate] Response status:', res.status);
+        
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           const errorMessage = errorData?.detail || `HTTP ${res.status}`;
-          console.error('[EventUpdate] Error:', errorMessage);
+          console.error('[EventUpdate] Backend error:', errorMessage, errorData);
           throw new Error("Event update failed: " + errorMessage);
         }
         
-        console.log('[EventUpdate] Event updated successfully');
+        const respBody = await res.json().catch(() => null);
+        console.log('[EventUpdate] Success response:', respBody);
+        
         showNotification("Event updated successfully!", "success");
         
         // Refetch events after successful update
+        console.log('[EventUpdate] Refetching events...');
         await refetchCurrentWeekEvents();
+        
       } catch (err) {
-        console.error("[EventUpdate] Failed to update event:", err?.message || err);
+        console.error("[EventUpdate] Update operation failed:", err?.message || err);
         const errorMessage = err?.message || "Failed to update event. Please try again.";
         showNotification(errorMessage, "error");
         throw err; // Re-throw to prevent modal from closing
       }
     } else {
       // POST new event to /events/
+      console.log('[EventCreate] Starting creation of new event');
+      
       try {
         const token = localStorage.getItem("token");
         const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          console.log('[EventCreate] Using auth token');
+        } else {
+          console.warn('[EventCreate] No auth token available');
+        }
         
-        console.log('[EventCreate] About to POST event:', eventPayload);
-        const res = await fetch(`${API_BASE}/events/`, {
+        const url = `${API_BASE}/events/`;
+        console.log('[EventCreate] Sending POST to:', url);
+        console.log('[EventCreate] POST payload:', eventPayload);
+        
+        const res = await fetch(url, {
           method: "POST",
           headers,
           credentials:
@@ -1156,29 +1226,33 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         
+        console.log('[EventCreate] Response status:', res.status);
+        
         let respBody;
         try { 
           respBody = await res.json(); 
         } catch (e) { 
+          console.warn('[EventCreate] Could not parse response body:', e);
           respBody = null; 
         }
         
-        console.log('[EventCreate] Response status:', res.status, ', body:', respBody);
+        console.log('[EventCreate] Response body:', respBody);
         
         if (!res.ok) {
           const errorDetail = respBody?.detail || `HTTP ${res.status}`;
-          console.error('[EventCreate] Error:', errorDetail);
+          console.error('[EventCreate] Backend error:', errorDetail, respBody);
           throw new Error("Event create failed: " + errorDetail);
         }
 
-        console.log('[EventCreate] Event created successfully');
+        console.log('[EventCreate] Event created successfully, ID:', respBody?.id);
         showNotification(`${is_appointment ? "Appointment" : "Event"} created successfully!`, "success");
 
         // Successful creation - refetch events to update UI
+        console.log('[EventCreate] Refetching events...');
         await refetchCurrentWeekEvents();
-        console.log('[EventCreate] Event created successfully, events refetched');
+        
       } catch (err) {
-        console.error("[EventCreate] Failed to create event:", err?.message || err);
+        console.error("[EventCreate] Create operation failed:", err?.message || err);
         const errorMessage = err?.message || "Failed to create event. Please try again.";
         showNotification(errorMessage, "error");
         throw err; // Re-throw to prevent modal from closing
@@ -1186,6 +1260,7 @@ function App() {
     }
     
     // Only close modal after successful operation
+    console.log('[EventSave] Operation completed successfully, closing modal');
     setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
   };
 
