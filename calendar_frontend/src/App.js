@@ -723,6 +723,110 @@ function App() {
 
   // Used by events (for demo, map category name to calendar id for filtering)
   const [events, setEvents] = useState([]);
+
+  // -- Dummy/demo data injection for development or empty-state preview --
+  const DEV_SEED_DUMMY_EVENTS =
+    process.env.REACT_APP_SEED_DUMMY_EVENTS === "true" ||
+    (typeof window !== "undefined" &&
+      window.localStorage &&
+      window.localStorage.getItem("SEED_DUMMY_EVENTS") === "active");
+  // Helper: week start calculation
+  const getISODate = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  function buildDummyEventsForWeek(weekStartStr, calendars) {
+    // Returns a <variety> of sample events, in various categories/colors.
+    // Spread across week, realistic times
+    const baseDate = new Date(weekStartStr);
+    const perCatId = Object.fromEntries(calendars.map((c) => [c.name, c.id]));
+    const plusDays = (date, n) => {
+      const d = new Date(date);
+      d.setDate(d.getDate() + n);
+      return d;
+    };
+    // Categories: Work, Personal, Family, Health, Appointments
+    return [
+      {
+        id: 1001,
+        title: "Project Standup",
+        description: "Daily sync (Zoom link in invite)",
+        start: `${getISODate(baseDate)}T09:00:00`,
+        end: `${getISODate(baseDate)}T09:30:00`,
+        category: "Work",
+        calendar_id: perCatId["Work"],
+        is_appointment: false,
+        invitees: ["alice@example.com", "bob@example.com"],
+      },
+      {
+        id: 1002,
+        title: "Gym - Strength Training",
+        description: "Don't forget water!",
+        start: `${getISODate(plusDays(baseDate, 2))}T18:30:00`,
+        end: `${getISODate(plusDays(baseDate, 2))}T19:30:00`,
+        category: "Health",
+        calendar_id: perCatId["Health"],
+        is_appointment: false,
+        invitees: [],
+      },
+      {
+        id: 1003,
+        title: "Family Dinner",
+        description: "Grandma's birthday, at home.",
+        start: `${getISODate(plusDays(baseDate, 4))}T19:00:00`,
+        end: `${getISODate(plusDays(baseDate, 4))}T21:00:00`,
+        category: "Family",
+        calendar_id: perCatId["Family"],
+        is_appointment: false,
+        invitees: ["mom@example.com", "dad@example.com"],
+      },
+      {
+        id: 1004,
+        title: "Dentist Appointment",
+        description: "Routine cleaning.",
+        start: `${getISODate(plusDays(baseDate, 1))}T10:00:00`,
+        end: `${getISODate(plusDays(baseDate, 1))}T10:45:00`,
+        category: "Appointments",
+        calendar_id: perCatId["Appointments"],
+        is_appointment: true,
+        invitees: ["dr.tooth@example.com"],
+      },
+      {
+        id: 1005,
+        title: "1:1 With Manager",
+        description: "Review this quarter's goals.",
+        start: `${getISODate(plusDays(baseDate, 3))}T14:00:00`,
+        end: `${getISODate(plusDays(baseDate, 3))}T14:30:00`,
+        category: "Work",
+        calendar_id: perCatId["Work"],
+        is_appointment: true,
+        invitees: ["boss@example.com"],
+      },
+      {
+        id: 1006,
+        title: "Coffee with Sarah",
+        description: "At Corner Café.",
+        start: `${getISODate(plusDays(baseDate, 5))}T11:15:00`,
+        end: `${getISODate(plusDays(baseDate, 5))}T11:45:00`,
+        category: "Personal",
+        calendar_id: perCatId["Personal"],
+        is_appointment: false,
+        invitees: ["sarah@example.com"],
+      },
+      {
+        id: 1007,
+        title: "Call Mom (Birthday)",
+        description: "Remember to call!",
+        start: `${getISODate(plusDays(baseDate, 6))}T20:00:00`,
+        end: `${getISODate(plusDays(baseDate, 6))}T20:30:00`,
+        category: "Family",
+        calendar_id: perCatId["Family"],
+        is_appointment: false,
+        invitees: ["mom@example.com"],
+      },
+    ];
+  }
+
   // For compatibility (legacy code) map calendars to 'categories'
   // Modern code should use just calendar_id ideally.
   const [categories, setCategories] = useState([
@@ -794,6 +898,26 @@ function App() {
     refetchCurrentWeekEvents();
     // eslint-disable-next-line
   }, [curWeekStart, checkedCalendarIds, user]); // refresh when week/calendars/user changes
+
+  // Inject dummy events if needed after fetching
+  useEffect(() => {
+    // Only inject when:
+    // 1. Explicit dev flag is set, or
+    // 2. Event list is empty (no backend events found for view)
+    if (
+      user &&
+      calendars.length &&
+      (DEV_SEED_DUMMY_EVENTS || events.length === 0)
+    ) {
+      // Defensive: Only overwrite if event list is empty or dev flag enabled
+      setEvents((evlist) => {
+        if (!DEV_SEED_DUMMY_EVENTS && evlist.length) return evlist;
+        return buildDummyEventsForWeek(curWeekStart, calendars);
+      });
+    }
+    // Only fires if calendars, events, user, curWeekStart change
+    // eslint-disable-next-line
+  }, [user, events.length, calendars, curWeekStart]);
 
   // Auth overlays
   if (!user) {
