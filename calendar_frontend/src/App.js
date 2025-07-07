@@ -281,8 +281,12 @@ function AuthProvider({ children }) {
       }
       // Backend returns: { access_token, token_type }
       const data = await res.json();
-      // Optionally, store the JWT for later API calls
-      // localStorage.setItem("token", data.access_token);
+      // Store the JWT for later API calls (needed for /events POST)
+      if (data && data.access_token) {
+        try {
+          localStorage.setItem("token", data.access_token);
+        } catch (e) {}
+      }
       setUser({ email }); // Set logged-in user
     } catch (err) {
       // Add more details for connection/network errors
@@ -298,7 +302,12 @@ function AuthProvider({ children }) {
   /** PUBLIC_INTERFACE
    * Logs out the user in frontend (local session only).
    */
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    try {
+      localStorage.removeItem("token");
+    } catch (e) {}
+  };
 
   /** PUBLIC_INTERFACE
    * Registers a user with backend, expects email and password.
@@ -923,24 +932,40 @@ function App() {
     } else {
       // POST new event to /events/
       try {
+        // Attempt to read token from localStorage for Authorization header
+        let token = null;
+        try {
+          token = localStorage.getItem("token");
+        } catch (e) {}
+        // Show full request/response debug for troubleshooting
+        console.log('[EventCreate] About to POST event:', eventPayload, "(token:", token, ")");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
         const res = await fetch(`${API_BASE}/events/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           credentials:
             API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
               ? "same-origin"
               : "include",
           body: JSON.stringify(eventPayload)
         });
-        if (!res.ok) throw new Error("Event create failed");
+        let respBody;
+        try { respBody = await res.json(); } catch (e) { respBody = null; }
+        console.log('[EventCreate] Response status:', res.status, ', body:', respBody);
+        if (!res.ok) {
+          if (respBody && respBody.detail) console.error('[EventCreate] Error:', respBody.detail);
+          throw new Error("Event create failed: " + (respBody?.detail || res.status));
+        }
         // Await backend response before refreshing event list
-        await res.json(); // ensure create fully completes
+        // ensure create fully completes
 
         // Robust fix: Refetch events and update the list BEFORE closing modal
         // This prevents a race condition where modal closes before new event appears
         await refetchCurrentWeekEvents(); // custom async function, see below
       } catch (err) {
         // Optionally show error to user
+        console.error("[EventCreate] Failed to create event:", err?.message || err);
       }
     }
     setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
