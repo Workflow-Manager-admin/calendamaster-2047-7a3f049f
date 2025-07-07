@@ -87,20 +87,22 @@ function WeekView({
                   })
                   .map(event => {
                     const [row, span] = getPosForEvent(event, startHour);
-                    // Only render event card at first timeslot
                     if (row !== rowIdx) return null;
-                    // Pick color: calendar_id (preferred), fallback category name, fallback default
-                    const color =
+                    // Always get the calendar color (calendar_id preferred) or fallback smartly
+                    const calColor =
                       (event.calendar_id && categoryColors[event.calendar_id]) ||
                       (event.category && categoryColors[event.category]) ||
+                      event.color ||
                       "var(--event-purple)";
                     return (
                       <div
                         className="weekview-event-card"
                         key={event.id}
                         style={{
-                          background: color,
+                          background: calColor,
+                          border: `1.7px solid ${calColor}`,
                           gridRow: `span ${span}`,
+                          boxShadow: `0 2px 13px ${calColor}22`
                         }}
                         onClick={ev => {
                           ev.stopPropagation();

@@ -41,6 +41,7 @@ const COLORS = {
  * When toggled, changes which events are shown in the calendar.
  */
 function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCalendar }) {
+  // Always render colors directly from the calendar object.
   return (
     <aside className="sidebar2" style={{ borderRight: '2px solid var(--divider)', minHeight: 0 }}>
       <div className="sidebar2-user">
@@ -72,6 +73,7 @@ function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCale
                 aria-label={`Show/hide ${cal.name}`}
                 id={`calbox-${cal.id}`}
               />
+              {/* Marker, always calendar's color */}
               <span
                 style={{
                   display: 'inline-block',
@@ -80,7 +82,8 @@ function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCale
                   borderRadius: 6,
                   background: cal.color || "#1976d2",
                   marginRight: 8,
-                  border: '1.5px solid #c9d6e2'
+                  border: `1.5px solid ${cal.color || '#c9d6e2'}`,
+                  boxShadow: `0 0 0 2px ${checkedCalendarIds.includes(cal.id) ? cal.color + '55' : 'transparent'}`
                 }}
               />
               <label htmlFor={`calbox-${cal.id}`} style={{ cursor: 'pointer', userSelect: 'none' }}>
