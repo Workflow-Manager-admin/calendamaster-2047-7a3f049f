@@ -657,44 +657,7 @@ function App() {
   const [checkedCalendarIds, setCheckedCalendarIds] = useState([1,2,3,4,5]);
 
   // Used by events (for demo, map category name to calendar id for filtering)
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      title: "Team Meeting",
-      start: new Date().toISOString().split("T")[0] + "T11:00",
-      end: new Date().toISOString().split("T")[0] + "T12:00",
-      calendar_id: 1,
-      category: "Work",
-      description: "Weekly sync with project team.",
-    },
-    {
-      id: 2,
-      title: "Dentist Appointment",
-      start: new Date().toISOString().split("T")[0] + "T16:00",
-      end: new Date().toISOString().split("T")[0] + "T17:00",
-      calendar_id: 4,
-      category: "Health",
-      description: "Routine cleaning",
-    },
-    {
-      id: 3,
-      title: "Lunch with Sam",
-      start: new Date().toISOString().split("T")[0] + "T13:00",
-      end: new Date().toISOString().split("T")[0] + "T13:30",
-      calendar_id: 2,
-      category: "Personal",
-      description: "Catch-up with Sam."
-    },
-    {
-      id: 4,
-      title: "Therapy Session",
-      start: new Date().toISOString().split("T")[0] + "T18:00",
-      end: new Date().toISOString().split("T")[0] + "T18:50",
-      calendar_id: 5, // Appointments
-      category: "Appointments",
-      description: "Shared appointment"
-    },
-  ]);
+  const [events, setEvents] = useState([]);
   // For compatibility (legacy code) map calendars to 'categories'
   // Modern code should use just calendar_id ideally.
   const [categories, setCategories] = useState([
@@ -708,6 +671,69 @@ function App() {
 
   // Modal (event editing/creation, for both regular events and appointments)
   const [modalState, setModalState] = useState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
+
+  // Backend API Base (for event fetching)
+  const API_BASE =
+    process.env.REACT_APP_API_URL ||
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:3001"
+      : "https://vscode-internal-149548-beta.beta01.cloud.kavia.ai:3001");
+
+  // Helper: Map backend API event object to frontend week view event
+  function mapApiEventToFrontend(evt) {
+    // Converts API EventOut to local event format, ensuring compatibility
+    return {
+      id: evt.id,
+      title: evt.title,
+      start: evt.start_datetime,
+      end: evt.end_datetime,
+      calendar_id: evt.calendar_id,
+      category: calendars.find(cal => cal.id === evt.calendar_id)?.name || evt.category || "",
+      description: evt.description,
+      is_appointment: evt.is_appointment,
+      invitees: evt.invitees || [], // If such a field exists
+    };
+  }
+
+  // Fetch events for current week when curWeekStart, checkedCalendarIds, or user changes
+  useEffect(() => {
+    // Calculate year, month, day for weekly API
+    const d = new Date(curWeekStart);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    // Only fetch for checked calendars; if none checked, setEvents([])
+    if (!checkedCalendarIds.length || !user) {
+      setEvents([]);
+      return;
+    }
+    // For now, fetch ALL week events and filter by checkedCalendarIds (backend has calendar_id for each event)
+    // Auth: Omit as JWT/auth not used, or add if token is implemented
+    fetch(
+      `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`,
+      {
+        credentials:
+          API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+            ? "same-origin"
+            : "include",
+      }
+    )
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch events");
+        return res.json();
+      })
+      .then(data => {
+        // data is an array of EventOut; filter by calendar_id in checkedCalendarIds
+        const filtered = (data || []).filter(e => checkedCalendarIds.includes(e.calendar_id));
+        setEvents(filtered.map(mapApiEventToFrontend));
+      })
+      .catch(err => {
+        setEvents([]);
+        // Optionally show error or log
+        // console.error("Event fetch error", err);
+      });
+    // eslint-disable-next-line
+  }, [curWeekStart, checkedCalendarIds, user]); // refresh when week/calendars/user changes
 
   // Auth overlays
   if (!user) {
@@ -769,35 +795,60 @@ function App() {
   };
 
   // Handler: save/add/edit event or appointment
-  const handleSaveEvent = (evtData) => {
-    // If editing: update; else create new with unique id and add appointment fields
-    if (modalState.mode === "edit" && modalState.event) {
-      setEvents(evts =>
-        evts.map(e =>
-          e.id === modalState.event.id
-            ? {
-                ...e,
-                ...evtData,
-                id: e.id,
-                calendar_id: evtData.calendar_id,
-                start: evtData.start,
-                end: evtData.end,
-                invitees: evtData.invitees,
-                is_appointment: evtData.is_appointment
-              }
-            : e
-        )
-      );
+  const handleSaveEvent = async (evtData) => {
+    // Compose payload for backend (add/edit logic)
+    const eventPayload = {
+      title: evtData.title,
+      description: evtData.description,
+      start_datetime: evtData.start,
+      end_datetime: evtData.end,
+      color: calendars.find(c => c.id === evtData.calendar_id)?.color || undefined,
+      calendar_id: evtData.calendar_id,
+      is_appointment: evtData.is_appointment || false,
+      // Invitations would be handled via a field if backend supports
+    };
+
+    if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
+      // PATCH to /events/{event_id}
+      try {
+        const res = await fetch(`${API_BASE}/events/${modalState.event.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials:
+            API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+              ? "same-origin"
+              : "include",
+          body: JSON.stringify(eventPayload)
+        });
+        if (!res.ok) throw new Error("Event update failed");
+        // refetch for the week
+        setTimeout(() => {
+          // Triggers above useEffect to refetch (by resetting curWeekStart to itself)
+          setCurWeekStart(s => s);
+        }, 0);
+      } catch (err) {
+        // Optionally show error to user
+      }
     } else {
-      setEvents(evts => [
-        ...evts,
-        {
-          ...evtData,
-          id: Math.max(...evts.map(e => e.id), 0) + 1,
-          invitees: evtData.invitees,
-          is_appointment: evtData.is_appointment
-        }
-      ]);
+      // POST new event to /events/
+      try {
+        const res = await fetch(`${API_BASE}/events/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials:
+            API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+              ? "same-origin"
+              : "include",
+          body: JSON.stringify(eventPayload)
+        });
+        if (!res.ok) throw new Error("Event create failed");
+        // refetch for the week
+        setTimeout(() => {
+          setCurWeekStart(s => s);
+        }, 0);
+      } catch (err) {
+        // Optionally show error to user
+      }
     }
     setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
   };
