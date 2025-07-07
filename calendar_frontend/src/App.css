@@ -154,7 +154,7 @@ body, #root {
 .sidebar2-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
   cursor: pointer;
   font-size: var(--sidebar-item-font);
   padding: var(--sidebar-item-padding) 20px var(--sidebar-item-padding) 32px;

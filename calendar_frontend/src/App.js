@@ -34,6 +34,65 @@ const COLORS = {
   }
 };
 
+/**
+ * Sidebar to display checkboxes for each calendar (by category).
+ * Shows all user/shared calendars with color bullets and checkboxes.
+ * When toggled, changes which events are shown in the calendar.
+ */
+function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCalendar }) {
+  return (
+    <aside className="sidebar2" style={{borderRight: '2px solid var(--divider)', minHeight: 0}}>
+      <div className="sidebar2-user">
+        <img
+          className="sidebar2-avatar"
+          src={`https://api.dicebear.com/7.x/identicon/svg?seed=user`}
+          alt="User"
+        />
+        <span className="sidebar2-username">My Name</span>
+      </div>
+      <div className="sidebar2-menu" style={{marginBottom:8}}>
+        <div className="sidebar2-section-title" style={{marginTop:14, marginBottom:10}}>CALENDARS</div>
+        <ul style={{listStyle:'none', margin:0, padding:0}}>
+          {calendars.map(cal => (
+            <li
+              key={cal.id}
+              className="sidebar2-item"
+              tabIndex={0}
+              style={{padding: '6px 17px 6px 28px'}}
+            >
+              <input
+                type="checkbox"
+                checked={checkedCalendarIds.includes(cal.id)}
+                onChange={() => onToggleCalendar(cal.id)}
+                style={{marginRight:12, accentColor: cal.color}}
+                aria-label={`Show/hide ${cal.name}`}
+                id={`calbox-${cal.id}`}
+              />
+              <span
+                style={{
+                  display:'inline-block',
+                  width: '12px',
+                  height: '12px',
+                  borderRadius:6,
+                  background: cal.color,
+                  marginRight:8,
+                  border: '1.5px solid #c9d6e2'
+                }}
+              />
+              <label htmlFor={`calbox-${cal.id}`} style={{cursor:'pointer', userSelect:'none'}}>
+                {cal.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="sidebar2-settings">
+        <button className="sidebar2-settings-btn"><IconCog size={18} /> Settings</button>
+      </div>
+    </aside>
+  );
+}
+
 // Sample category set (can be loaded from backend)
 const defaultCategories = [
   { id: 1, name: "Work", color: COLORS["Work"] },
@@ -583,9 +642,68 @@ function App() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
 
-  // Event and category state
-  const [categories, setCategories] = useState(defaultCategories);
-  const [events, setEvents] = useState(SAMPLE_EVENTS);
+  // --- Calendar/sim categories as "calendars" ---
+  // In final, this will be fetched from backend via /calendars/
+  // Each calendar will have {id, name, color}. Assume all owned + shared calendars are merged here.
+  const [calendars, setCalendars] = useState([
+    {id: 1, name: "Work", color: COLORS["Work"]},
+    {id: 2, name: "Personal", color: COLORS["Personal"]},
+    {id: 3, name: "Family", color: COLORS["Family"]},
+    {id: 4, name: "Health", color: COLORS["Health"]},
+    {id: 5, name: "Appointments", color: "#9858A9"},
+  ]);
+  // Track checked/visible calendars (use all enabled by default)
+  const [checkedCalendarIds, setCheckedCalendarIds] = useState([1,2,3,4,5]);
+
+  // Used by events (for demo, map category name to calendar id for filtering)
+  const [events, setEvents] = useState([
+    {
+      id: 1,
+      title: "Team Meeting",
+      start: new Date().toISOString().split("T")[0] + "T11:00",
+      end: new Date().toISOString().split("T")[0] + "T12:00",
+      calendar_id: 1,
+      category: "Work",
+      description: "Weekly sync with project team.",
+    },
+    {
+      id: 2,
+      title: "Dentist Appointment",
+      start: new Date().toISOString().split("T")[0] + "T16:00",
+      end: new Date().toISOString().split("T")[0] + "T17:00",
+      calendar_id: 4,
+      category: "Health",
+      description: "Routine cleaning",
+    },
+    {
+      id: 3,
+      title: "Lunch with Sam",
+      start: new Date().toISOString().split("T")[0] + "T13:00",
+      end: new Date().toISOString().split("T")[0] + "T13:30",
+      calendar_id: 2,
+      category: "Personal",
+      description: "Catch-up with Sam."
+    },
+    {
+      id: 4,
+      title: "Therapy Session",
+      start: new Date().toISOString().split("T")[0] + "T18:00",
+      end: new Date().toISOString().split("T")[0] + "T18:50",
+      calendar_id: 5, // Appointments
+      category: "Appointments",
+      description: "Shared appointment"
+    },
+  ]);
+  // For compatibility (legacy code) map calendars to 'categories'
+  // Modern code should use just calendar_id ideally.
+  const [categories, setCategories] = useState([
+    { id: 1, name: "Work", color: COLORS["Work"] },
+    { id: 2, name: "Personal", color: COLORS["Personal"] },
+    { id: 3, name: "Family", color: COLORS["Family"] },
+    { id: 4, name: "Health", color: COLORS["Health"] },
+    { id: 5, name: "Appointments", color: "#9858A9" }
+  ]);
+
 
   // Modal (event editing)
   const [modalState, setModalState] = useState({ open: false, event: null, mode: null });
@@ -640,7 +758,8 @@ function App() {
       event: {
         start: datetime,
         end: datetime.slice(0, 11) + (parseInt(datetime.slice(11, 13), 10) + 1).toString().padStart(2, "0") + ":00",
-        category: categories[0]?.name || "",
+        category: calendars[0]?.name || "",
+        calendar_id: calendars[0]?.id || 1,
       },
       mode: "add"
     });
@@ -656,8 +775,13 @@ function App() {
     setModalState({ open: false, event: null, mode: null });
   };
 
-  // Category color map
-  const categoryColors = Object.fromEntries(categories.map(c => [c.name, c.color]));
+  // Filter events only for visible ("checked") calendars
+  const visibleEvents = events.filter(evt => checkedCalendarIds.includes(evt.calendar_id));
+
+  // Map calendar id->color
+  const calendarColorMap = Object.fromEntries(calendars.map(c => [c.id, c.color]));
+  // category (for compatibility): maps category name to color
+  const categoryColors = Object.fromEntries(calendars.map(c => [c.name, c.color]));
 
   // Week navigation
   function shiftWeek(delta) {
@@ -666,14 +790,22 @@ function App() {
     setCurWeekStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   }
 
+  // Handler for toggling calendar visibility
+  function handleToggleCalendar(calId) {
+    setCheckedCalendarIds(ids =>
+      ids.includes(calId) ? ids.filter(id => id !== calId) : [...ids, calId]
+    );
+  }
+
   return (
     <div className="app-root2">
       <AppHeader user={user} onLogout={logout} />
       <div className="calendar2-layout">
-        <SidebarNav
-          sections={sidebarSections}
-          selectedSection={selectedNav}
-          onSelect={setSelectedNav}
+        {/* Sidebar for calendar/category checkboxes */}
+        <SidebarCalendarCheckboxes
+          calendars={calendars}
+          checkedCalendarIds={checkedCalendarIds}
+          onToggleCalendar={handleToggleCalendar}
         />
         <main style={{ flex: 1, minWidth: 0, background: "var(--main-bg)" }}>
           {/* Week navigation */}
@@ -711,7 +843,7 @@ function App() {
             days={weekDays}
             startHour={7}
             endHour={20}
-            events={events}
+            events={visibleEvents}
             onEventClick={handleEditEvent}
             onSlotDoubleClick={handleSlotDoubleClick}
             categoryColors={categoryColors}
@@ -724,7 +856,7 @@ function App() {
         event={modalState.event}
         onClose={() => setModalState({ open: false, event: null, mode: null })}
         onSave={handleSaveEvent}
-        categories={categories}
+        categories={calendars}
       />
     </div>
   );
