@@ -810,9 +810,15 @@ function App() {
       end_datetime: evtData.end,
       color: calendars.find(c => c.id === evtData.calendar_id)?.color || undefined,
       calendar_id: evtData.calendar_id,
-      is_appointment: evtData.is_appointment || false,
-      // Invitations would be handled via a field if backend supports
+      is_appointment: !!evtData.is_appointment,
+      // Backend does not yet show invitee support in schema;
+      // send invitees if provided (array of emails/usernames) as extra field (for future)
+      invitees: Array.isArray(evtData.invitees) ? evtData.invitees : (evtData.invitees ? [evtData.invitees] : []),
     };
+
+    if (!eventPayload.invitees || !eventPayload.invitees.length) {
+      delete eventPayload.invitees;
+    }
 
     if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
       // PATCH to /events/{event_id}
@@ -827,9 +833,7 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         if (!res.ok) throw new Error("Event update failed");
-        // refetch for the week
         setTimeout(() => {
-          // Triggers above useEffect to refetch (by resetting curWeekStart to itself)
           setCurWeekStart(s => s);
         }, 0);
       } catch (err) {
@@ -848,7 +852,6 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         if (!res.ok) throw new Error("Event create failed");
-        // refetch for the week
         setTimeout(() => {
           setCurWeekStart(s => s);
         }, 0);

@@ -224,6 +224,13 @@ function WeekView({
       (event.category && categoryColors[event.category]) ||
       event.color ||
       "var(--event-purple)";
+    // Distinguish appointment visually by badge/pill coloring and/or italic subheader for invitees.
+    const isAppointment = !!event.is_appointment;
+    const inviteeString =
+      event.invitees && event.invitees.length
+        ? "Invited: " + event.invitees.join(", ")
+        : "";
+
     return (
       <div
         className="weekview-event-card"
@@ -246,6 +253,11 @@ function WeekView({
           opacity: isDragging ? 0.8 : 1,
           userSelect: "none",
           minHeight: "32px",
+          ...(isAppointment && {
+            border: "2.5px dashed #ffca28",
+            background: "#fff7e9",
+            color: "#176cae", // primary color text for high contrast
+          }),
         }}
         onMouseDown={(e) => {
           if (!isDragging) handleEventMouseDown(e, event, "move", dayIdx, rowIdx, span);
@@ -258,7 +270,7 @@ function WeekView({
           ev.stopPropagation();
           onEventClick?.(event);
         }}
-        title={event.title}
+        title={event.title + (inviteeString ? " (" + inviteeString + ")" : "")}
       >
         {/* Resize handles */}
         <div
@@ -275,10 +287,46 @@ function WeekView({
           onMouseDown={(e) => handleEventMouseDown(e, event, "resize-top", dayIdx, rowIdx, span)}
           onTouchStart={(e) => handleEventMouseDown(e, event, "resize-top", dayIdx, rowIdx, span)}
         />
-        <div className="event-title">{event.title}</div>
+        <div className="event-title" style={isAppointment ? { color: "#a96916", fontWeight: 700 } : {}}>
+          {event.title}
+          {isAppointment && (
+            <span
+              style={{
+                display: "inline-block",
+                marginLeft: 8,
+                background: "#ffe790",
+                color: "#986b15",
+                fontSize: "12px",
+                fontWeight: 600,
+                borderRadius: "8px",
+                padding: "2px 7px",
+                letterSpacing: "0.02em",
+                verticalAlign: "middle",
+              }}
+            >
+              Appointment
+            </span>
+          )}
+        </div>
         <div className="event-time">
           {event.start.slice(11, 16)}–{event.end.slice(11, 16)}
         </div>
+        {isAppointment && inviteeString && (
+          <div
+            style={{
+              fontSize: "11.2px",
+              fontStyle: "italic",
+              color: "#3273a6",
+              marginTop: "1.5px",
+              opacity: 0.66,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {inviteeString}
+          </div>
+        )}
         <div
           style={{
             position: "absolute",
