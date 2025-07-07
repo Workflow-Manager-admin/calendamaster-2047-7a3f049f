@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import RegisterForm from "./RegisterForm";
+import WeekView from "./WeekView";
+import {
+  IconCalendar,
+  IconContacts,
+  IconTasks,
+  IconSearch,
+  IconBell,
+  IconCog,
+} from "./icons";
 
+// PUBLIC_INTERFACE
+// Calendar Application root for enhanced week-view UI.
 /** 
  * PUBLIC_INTERFACE
  * Calendar Application root component.
@@ -52,9 +63,103 @@ const SAMPLE_EVENTS = [
   },
 ];
 
-// --- Authentication Context ---
+const sidebarSections = [
+  {
+    key: "calendar",
+    label: "Calendar",
+    icon: <IconCalendar />,
+    badge: null,
+  },
+  {
+    key: "contacts",
+    label: "Contacts",
+    icon: <IconContacts />,
+    badge: null,
+  },
+  {
+    key: "tasks",
+    label: "Tasks",
+    icon: <IconTasks />,
+    badge: 3,
+  },
+];
 
 const AuthContext = React.createContext();
+
+// PUBLIC_INTERFACE
+function AppHeader({ user, onLogout }) {
+  return (
+    <header className="header-bar">
+      <div className="header-left">
+        <span className="header-logo">
+          <IconCalendar size={32} />
+        </span>
+        <span className="header-title">Calendamaster</span>
+        <span className="header-actions">
+          <button className="header-icon-btn" aria-label="Search">
+            <IconSearch />
+          </button>
+          <button className="header-icon-btn" aria-label="Notifications">
+            <IconBell />
+          </button>
+          <button className="header-icon-btn" aria-label="Settings">
+            <IconCog />
+          </button>
+        </span>
+      </div>
+      <div className="header-profile">
+        <img
+          className="header-avatar"
+          src={`https://api.dicebear.com/7.x/identicon/svg?seed=${user?.email || "me"}`}
+          alt="avatar"
+        />
+        <span className="header-username" style={{ fontSize: 15, fontWeight: 540 }}>{user?.email}</span>
+        <button className="header-logout-btn" onClick={onLogout}>
+          Logout
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/**
+ * PUBLIC_INTERFACE
+ * SidebarNav for navigation with icons and badges.
+ */
+function SidebarNav({ sections, selectedSection, onSelect }) {
+  return (
+    <aside className="sidebar2">
+      <div className="sidebar2-user">
+        <img
+          className="sidebar2-avatar"
+          src={`https://api.dicebear.com/7.x/identicon/svg?seed=user`}
+          alt="User"
+        />
+        <span className="sidebar2-username">My Name</span>
+      </div>
+      <div className="sidebar2-menu">
+        <div className="sidebar2-section-title">MENU</div>
+        <ul className="sidebar2-list">
+          {sections.map(sec => (
+            <li
+              key={sec.key}
+              className={`sidebar2-item${selectedSection === sec.key ? " selected" : ""}`}
+              onClick={() => onSelect(sec.key)}
+              tabIndex={0}
+            >
+              <span className="sidebar2-icon">{sec.icon}</span>
+              {sec.label}
+              {sec.badge && <span className="sidebar2-badge">{sec.badge}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="sidebar2-settings">
+        <button className="sidebar2-settings-btn"><IconCog size={18} /> Settings</button>
+      </div>
+    </aside>
+  );
+}
 
 // PUBLIC_INTERFACE
 function AuthProvider({ children }) {
@@ -453,117 +558,40 @@ function EventModal({ open, event, onClose, onSave, categories }) {
 
 // --- Main Calendar App ---
 
-// PUBLIC_INTERFACE
+/**
+ * New App (Week view & modernized layout)
+ */
 function App() {
-  // THEME
-  const [theme, setTheme] = useState("light");
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
-
   // AUTH
   const { user, login, logout, register } = React.useContext(AuthContext);
-  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authMode, setAuthMode] = useState("login");
+  // Sidebar nav section
+  const [selectedNav, setSelectedNav] = useState("calendar");
 
-  // CALENDAR VIEW
+  // Current date for calendar view
   const today = new Date();
-  const [calendarDate, setCalendarDate] = useState(() => {
-    const d = today;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  const startOfWeek = (date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    // Assuming week starts Monday for this UI. If Sunday, just change 1->0, etc.
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d;
+  };
+  const [curWeekStart, setCurWeekStart] = useState(() => {
+    const d = startOfWeek(new Date());
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
-  const [calendarView, setCalendarView] = useState("month"); // "month" | "week" | "day"
-  const curYear = parseInt(calendarDate.split("-")[0], 10);
-  const curMonth = parseInt(calendarDate.split("-")[1], 10) - 1;
 
-  // EVENTS (would be loaded from backend)
+  // Event and category state
+  const [categories, setCategories] = useState(defaultCategories);
   const [events, setEvents] = useState(SAMPLE_EVENTS);
 
-  // CATEGORIES (would be loaded/managed per user from backend)
-  const [categories, setCategories] = useState(defaultCategories);
+  // Modal (event editing)
+  const [modalState, setModalState] = useState({ open: false, event: null, mode: null });
 
-  // Category selection
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState(categories.map(c => c.id));
-  useEffect(() => {
-    // Reset when categories change
-    setSelectedCategoryIds(categories.map(c => c.id));
-  }, [categories]);
-
-  // Event CRUD/Dialogue state
-  const [modalState, setModalState] = useState({ open: false, event: null, mode: null, anchorDay: null });
-
-  // --- Event Handlers ---
-
-  // Add/edit/delete events (use backend API calls in real app)
-  const handleAddEditEvent = useCallback((evtData) => {
-    if (modalState.mode === "edit" && modalState.event) {
-      setEvents(evts => evts.map(e => e.id === modalState.event.id ? { ...e, ...evtData } : e));
-    } else {
-      setEvents(evts => [...evts, { ...evtData, id: Math.max(...evts.map(e => e.id), 0) + 1 }]);
-    }
-    setModalState({ open: false, event: null, mode: null, anchorDay: null });
-  }, [modalState]);
-
-  // Day selection
-  const handleSelectDay = (dateStr) => {
-    // Optionally, show day view
-    setCalendarDate(dateStr.slice(0, 7) + "-01");
-    setCalendarView("day");
-  };
-
-  // Add event modal
-  const handleAddEvent = (dateStr) => {
-    setModalState({
-      open: true,
-      event: {
-        start: dateStr + "T09:00",
-        end: dateStr + "T10:00",
-        category: categories[0].name,
-      },
-      mode: "add",
-      anchorDay: dateStr
-    });
-  };
-
-  // Edit event modal
-  const handleEditEvent = (event) => {
-    setModalState({
-      open: true,
-      event,
-      mode: "edit",
-      anchorDay: event.start.slice(0, 10),
-    });
-  };
-
-  // Category selection toggle
-  const handleSelectCategory = (catId) => {
-    setSelectedCategoryIds(s =>
-      s.includes(catId)
-        ? s.filter(id => id !== catId)
-        : [...s, catId]
-    );
-  };
-
-  // Category CRUD (for simplicity only edit name/color)
-  const [catEditModal, setCatEditModal] = useState({ open: false, category: null, isNew: false });
-  const handleAddCategory = () => {
-    setCatEditModal({ open: true, category: { name: "", color: COLORS.accent }, isNew: true });
-  };
-  const handleEditCategory = (cat) => {
-    setCatEditModal({ open: true, category: { ...cat }, isNew: false });
-  };
-  const handleSaveCategory = (cat) => {
-    if (catEditModal.isNew) {
-      setCategories(cs => [...cs, { ...cat, id: Math.max(...cs.map(c => c.id), 0) + 1 }]);
-    } else {
-      setCategories(cs => cs.map(c => c.id === catEditModal.category.id ? { ...c, ...cat } : c));
-    }
-    setCatEditModal({ open: false, category: null, isNew: false });
-  };
-
-  // --- UI ---
-
+  // Auth overlays
   if (!user) {
-    // Show login/register screens
     return (
       <div className="auth-screen">
         {authMode === "login" ? (
@@ -580,100 +608,124 @@ function App() {
       </div>
     );
   }
+
+  // Build days in view (Mon–Sun)
+  function getWeekDays(weekStartStr) {
+    const d = new Date(weekStartStr);
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d1 = new Date(d);
+      d1.setDate(d.getDate() + i);
+      const label = d1.toLocaleDateString(undefined, { weekday: "short" });
+      const iso = d1.toISOString().slice(0, 10);
+      days.push({
+        date: iso,
+        label,
+        isToday: iso === new Date().toISOString().slice(0, 10),
+      });
+    }
+    return days;
+  }
+  const weekDays = getWeekDays(curWeekStart);
+
+  // Handler: event click/edit
+  const handleEditEvent = (event) => {
+    setModalState({ open: true, event, mode: "edit" });
+  };
+
+  // Handler: double click slot to add new event
+  const handleSlotDoubleClick = (datetime) => {
+    setModalState({
+      open: true,
+      event: {
+        start: datetime,
+        end: datetime.slice(0, 11) + (parseInt(datetime.slice(11, 13), 10) + 1).toString().padStart(2, "0") + ":00",
+        category: categories[0]?.name || "",
+      },
+      mode: "add"
+    });
+  };
+
+  // Handler: save/add/edit event
+  const handleSaveEvent = (evtData) => {
+    if (modalState.mode === "edit" && modalState.event) {
+      setEvents(evts => evts.map(e => e.id === modalState.event.id ? { ...e, ...evtData } : e));
+    } else {
+      setEvents(evts => [...evts, { ...evtData, id: Math.max(...evts.map(e => e.id), 0) + 1 }]);
+    }
+    setModalState({ open: false, event: null, mode: null });
+  };
+
+  // Category color map
+  const categoryColors = Object.fromEntries(categories.map(c => [c.name, c.color]));
+
+  // Week navigation
+  function shiftWeek(delta) {
+    const d = new Date(curWeekStart);
+    d.setDate(d.getDate() + 7 * delta);
+    setCurWeekStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+
   return (
-    <div className="app-root">
-      <NavBar user={user} onLogout={logout} onThemeToggle={() => setTheme(t => t === "light" ? "dark" : "light")} theme={theme} />
-      <div className="calendar-layout">
-        <Sidebar
-          categories={categories}
-          selectedCategoryIds={selectedCategoryIds}
-          onSelectCategory={handleSelectCategory}
-          onAdd={handleAddCategory}
-          onEdit={handleEditCategory}
+    <div className="app-root2">
+      <AppHeader user={user} onLogout={logout} />
+      <div className="calendar2-layout">
+        <SidebarNav
+          sections={sidebarSections}
+          selectedSection={selectedNav}
+          onSelect={setSelectedNav}
         />
-        <main className="calendar-main">
-          <div className="calendar-toolbar">
-            <button onClick={() => setCalendarView("month")} className={calendarView === "month" ? "active" : ""}>Month</button>
-            <button onClick={() => setCalendarView("week")} className={calendarView === "week" ? "active" : ""}>Week</button>
-            <button onClick={() => setCalendarView("day")} className={calendarView === "day" ? "active" : ""}>Day</button>
-            <div className="calendar-toolbar-date">
-              <button
-                onClick={() => {
-                  // Previous month
-                  const d = new Date(calendarDate);
-                  d.setMonth(d.getMonth() - 1);
-                  setCalendarDate(d.toISOString().slice(0, 7) + "-01");
-                }}>
-                &lt;
-              </button>
-              <span>{today.toLocaleString("default", { month: "long" })} {curYear}</span>
-              <button
-                onClick={() => {
-                  // Next month
-                  const d = new Date(calendarDate);
-                  d.setMonth(d.getMonth() + 1);
-                  setCalendarDate(d.toISOString().slice(0, 7) + "-01");
-                }}>
-                &gt;
-              </button>
-            </div>
+        <main style={{ flex: 1, minWidth: 0, background: "var(--main-bg)" }}>
+          {/* Week navigation */}
+          <div style={{ display: "flex", alignItems: "center", padding: "18px 0 7px 6px", gap: "17px", marginBottom: 10 }}>
+            <button aria-label="Previous week" onClick={() => shiftWeek(-1)} style={{
+              fontSize: "1.18em",
+              border: "none",
+              background: "none",
+              padding: "3px 9px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              color: "#176cae"
+            }}>&lt;</button>
+            <span style={{
+              fontWeight: 610,
+              fontSize: "18.5px",
+              letterSpacing: "0.05em",
+            }}>
+              {`${new Date(curWeekStart).toLocaleString("default", { month: "long" })} ${new Date(curWeekStart).getFullYear()}`}
+            </span>
+            <button aria-label="Next week" onClick={() => shiftWeek(1)} style={{
+              fontSize: "1.18em",
+              border: "none",
+              background: "none",
+              padding: "3px 9px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              color: "#176cae"
+            }}>&gt;</button>
+            <span style={{ marginLeft: "auto", color: "#6a7e93", fontSize: "1em" }}>
+              Week of {weekDays[0].date}
+            </span>
           </div>
-          {/* Calendar display */}
-          {calendarView === "month" && (
-            <CalendarMonthView
-              year={curYear}
-              month={curMonth}
-              events={events}
-              categories={categories}
-              onSelectDay={handleSelectDay}
-              onAddEvent={handleAddEvent}
-              onEditEvent={handleEditEvent}
-              selectedCategoryIds={selectedCategoryIds}
-            />
-          )}
-          {/* TODO: Implement week/day views (easy extension) */}
+          <WeekView
+            days={weekDays}
+            startHour={7}
+            endHour={20}
+            events={events}
+            onEventClick={handleEditEvent}
+            onSlotDoubleClick={handleSlotDoubleClick}
+            categoryColors={categoryColors}
+          />
         </main>
       </div>
-
-      {/* Event management modal */}
+      {/* Event edit modal (reuse previous EventModal if customized) */}
       <EventModal
         open={modalState.open}
         event={modalState.event}
-        onClose={() => setModalState({ open: false, event: null, mode: null, anchorDay: null })}
-        onSave={handleAddEditEvent}
+        onClose={() => setModalState({ open: false, event: null, mode: null })}
+        onSave={handleSaveEvent}
         categories={categories}
       />
-      {/* Category edit modal */}
-      <Modal open={catEditModal.open} onClose={() => setCatEditModal({ open: false, category: null, isNew: false })}>
-        <form
-          className="category-form"
-          onSubmit={e => {
-            e.preventDefault();
-            handleSaveCategory(catEditModal.category);
-          }}
-        >
-          <h3>{catEditModal.isNew ? "Add Category" : "Edit Category"}</h3>
-          <label>
-            Name
-            <input
-              value={catEditModal.category?.name || ""}
-              onChange={e => setCatEditModal(c => ({ ...c, category: { ...c.category, name: e.target.value } }))}
-              required
-            />
-          </label>
-          <label>
-            Color
-            <input
-              type="color"
-              value={catEditModal.category?.color || "#cccccc"}
-              onChange={e => setCatEditModal(c => ({ ...c, category: { ...c.category, color: e.target.value } }))}
-            />
-          </label>
-          <div className="category-form-actions">
-            <button type="submit" className="btn-primary">Save</button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }
