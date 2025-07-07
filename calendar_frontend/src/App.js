@@ -693,6 +693,9 @@ function App() {
   // Sidebar nav section
   const [selectedNav, setSelectedNav] = useState("calendar");
 
+  // Add state for user notifications at the top level
+  const [notification, setNotification] = useState({ show: false, message: "", type: "" });
+
   // Current date for calendar view
   const today = new Date();
   const startOfWeek = (date) => {
@@ -917,7 +920,7 @@ function App() {
   // State to track whether we've attempted to fetch real events
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
-  // Inject dummy events only when explicitly needed
+  // Inject dummy events only when explicitly needed and within valid week bounds
   useEffect(() => {
     // Only inject dummy events when:
     // 1. Explicit dev flag is set, OR
@@ -930,10 +933,37 @@ function App() {
       // Only set dummy events if we don't already have real events (prevent overwriting)
       if (DEV_SEED_DUMMY_EVENTS || events.length === 0) {
         const dummyEvents = buildDummyEventsForWeek(curWeekStart, calendars);
-        // Filter dummy events to only show ones for checked calendars
-        const filteredDummyEvents = dummyEvents.filter(e => 
-          checkedCalendarIds.includes(e.calendar_id)
-        );
+        
+        // Filter dummy events to:
+        // 1. Only show ones for checked calendars
+        // 2. Only show events that fall within the current week view (valid grid bounds)
+        // 3. Ensure event times are within valid display hours (7 AM to 8 PM)
+        const currentWeekStart = new Date(curWeekStart);
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekEnd.getDate() + 6); // End of week (Sunday)
+        
+        const filteredDummyEvents = dummyEvents.filter(e => {
+          // Check if calendar is selected
+          if (!checkedCalendarIds.includes(e.calendar_id)) return false;
+          
+          // Check if event falls within current week bounds
+          const eventStart = new Date(e.start);
+          const eventDate = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+          
+          if (eventDate < currentWeekStart || eventDate > currentWeekEnd) return false;
+          
+          // Check if event times are within display bounds (7 AM to 8 PM)
+          const eventStartHour = eventStart.getHours();
+          const eventEnd = new Date(e.end);
+          const eventEndHour = eventEnd.getHours();
+          
+          // Only show events that have at least some portion within display hours
+          if (eventEndHour < 7 || eventStartHour > 20) return false;
+          
+          return true;
+        });
+        
+        console.log(`[DummyEvents] Showing ${filteredDummyEvents.length} dummy events for week ${curWeekStart}`);
         setEvents(filteredDummyEvents);
       }
     }
@@ -999,6 +1029,14 @@ function App() {
     });
   };
 
+  // Helper function to show notifications
+  const showNotification = (message, type = "info", duration = 3000) => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: "", type: "" });
+    }, duration);
+  };
+
   // Handler: save/add/edit event or appointment
   // PUBLIC_INTERFACE
   const handleSaveEvent = async (evtData) => {
@@ -1049,9 +1087,8 @@ function App() {
     }
 
     if (!eventPayload.title || !eventPayload.start_datetime || !eventPayload.end_datetime || !eventPayload.calendar_id) {
-      // Required fields check
-      setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
-      return;
+      // Required fields check - throw error instead of silently failing
+      throw new Error("Missing required fields: title, start time, end time, and category are required");
     }
 
     if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
@@ -1071,6 +1108,8 @@ function App() {
           is_appointment: eventPayload.is_appointment
         };
         
+        console.log('[EventUpdate] Updating event:', modalState.event.id, 'with payload:', patchPayload);
+        
         const res = await fetch(`${API_BASE}/events/${modalState.event.id}`, {
           method: "PATCH",
           headers,
@@ -1083,15 +1122,21 @@ function App() {
         
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
-          throw new Error("Event update failed: " + (errorData?.detail || res.status));
+          const errorMessage = errorData?.detail || `HTTP ${res.status}`;
+          console.error('[EventUpdate] Error:', errorMessage);
+          throw new Error("Event update failed: " + errorMessage);
         }
+        
+        console.log('[EventUpdate] Event updated successfully');
+        showNotification("Event updated successfully!", "success");
         
         // Refetch events after successful update
         await refetchCurrentWeekEvents();
       } catch (err) {
         console.error("[EventUpdate] Failed to update event:", err?.message || err);
-        // Don't close modal on error - let user retry
-        return;
+        const errorMessage = err?.message || "Failed to update event. Please try again.";
+        showNotification(errorMessage, "error");
+        throw err; // Re-throw to prevent modal from closing
       }
     } else {
       // POST new event to /events/
@@ -1126,13 +1171,17 @@ function App() {
           throw new Error("Event create failed: " + errorDetail);
         }
 
+        console.log('[EventCreate] Event created successfully');
+        showNotification(`${is_appointment ? "Appointment" : "Event"} created successfully!`, "success");
+
         // Successful creation - refetch events to update UI
         await refetchCurrentWeekEvents();
         console.log('[EventCreate] Event created successfully, events refetched');
       } catch (err) {
         console.error("[EventCreate] Failed to create event:", err?.message || err);
-        // Don't close modal on error - let user retry
-        return;
+        const errorMessage = err?.message || "Failed to create event. Please try again.";
+        showNotification(errorMessage, "error");
+        throw err; // Re-throw to prevent modal from closing
       }
     }
     
@@ -1165,6 +1214,31 @@ function App() {
   return (
     <div className="app-root2">
       <AppHeader user={user} onLogout={logout} />
+      
+      {/* Notification component */}
+      {notification.show && (
+        <div 
+          style={{
+            position: "fixed",
+            top: "70px",
+            right: "20px",
+            zIndex: 1000,
+            padding: "12px 20px",
+            borderRadius: "6px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            backgroundColor: notification.type === "error" ? "#f44336" : 
+                            notification.type === "success" ? "#4caf50" : "#2196f3",
+            color: "white",
+            fontWeight: 500,
+            fontSize: "14px",
+            maxWidth: "300px",
+            animation: "slideInRight 0.3s ease-out"
+          }}
+        >
+          {notification.message}
+        </div>
+      )}
+      
       <div className="calendar2-layout">
         {/* Sidebar for calendar/category checkboxes */}
         <SidebarCalendarCheckboxes
@@ -1227,6 +1301,7 @@ function App() {
                 const currentEvent = events.find(e => e.id === eventId);
                 if (!currentEvent) {
                   console.error("Cannot update event: event not found");
+                  showNotification("Event not found. Please refresh and try again.", "error");
                   return;
                 }
                 
@@ -1240,6 +1315,8 @@ function App() {
                   is_appointment: currentEvent.is_appointment || false
                 };
                 
+                console.log('[EventDrag] Updating event via drag/resize:', eventId, patchPayload);
+                
                 const res = await fetch(`${API_BASE}/events/${eventId}`, {
                   method: "PATCH",
                   headers,
@@ -1252,14 +1329,20 @@ function App() {
                 
                 if (!res.ok) {
                   const errorData = await res.json().catch(() => ({}));
-                  console.error("Event update failed:", errorData?.detail || res.status);
+                  const errorMessage = errorData?.detail || `HTTP ${res.status}`;
+                  console.error("Event drag/resize update failed:", errorMessage);
+                  showNotification("Failed to update event. Changes reverted.", "error");
                   return;
                 }
+                
+                console.log('[EventDrag] Event updated successfully via drag/resize');
+                showNotification("Event updated successfully!", "success", 2000);
                 
                 // Refetch events after successful update
                 await refetchCurrentWeekEvents();
               } catch (err) {
-                console.error("Failed to update event:", err?.message || err);
+                console.error("Failed to update event via drag/resize:", err?.message || err);
+                showNotification("Failed to update event. Please try again.", "error");
               }
             }}
           />

@@ -416,6 +416,17 @@ body, #root {
   to   { opacity: 1; transform: none;}
 }
 
+@keyframes slideInRight {
+  from { 
+    opacity: 0; 
+    transform: translateX(100px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0);
+  }
+}
+
 /* Auth Form V2 */
 .auth-form-v2 {
   display: flex;
