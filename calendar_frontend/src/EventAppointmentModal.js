@@ -65,16 +65,19 @@ function EventAppointmentModal({
     // Simple validation
     if (!formData.title.trim() || !formData.start || !formData.end || !formData.categoryId) return;
     // Pass normalized object, including invitees as array
+    // Trigger onSave with both calendar_id and categoryId for robustness (App.js will handle mapping).
     onSave({
       title: formData.title,
       description: formData.description,
       start: formData.start,
       end: formData.end,
       calendar_id: parseInt(formData.categoryId, 10),
+      categoryId: formData.categoryId,
       invitees: formData.invitees
         ? formData.invitees.split(",").map((v) => v.trim()).filter(Boolean)
         : [],
       is_appointment: formData.isAppointment,
+      isAppointment: formData.isAppointment,
     });
   };
 

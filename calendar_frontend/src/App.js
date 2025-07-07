@@ -851,23 +851,58 @@ function App() {
   };
 
   // Handler: save/add/edit event or appointment
+  // PUBLIC_INTERFACE
   const handleSaveEvent = async (evtData) => {
+    /**
+     * Compose and submit an event/meeting/appointment to backend.
+     * Fix: Map modal's 'categoryId' or 'calendar_id' robustly, and pass correct fields.
+     * Always use category/calendar id coming out of modal (can be under evtData.categoryId or evtData.calendar_id).
+     */
+    // Accept both possible property names
+    const calendar_id =
+      evtData.calendar_id !== undefined
+        ? evtData.calendar_id
+        : evtData.categoryId !== undefined
+        ? parseInt(evtData.categoryId, 10)
+        : undefined;
+
+    // Make sure to map 'isAppointment' (used in EventAppointmentModal) into is_appointment payload, and ensure field is boolean.
+    const is_appointment =
+      evtData.is_appointment !== undefined
+        ? !!evtData.is_appointment
+        : evtData.isAppointment !== undefined
+        ? !!evtData.isAppointment
+        : false;
+
     // Compose payload for backend (add/edit logic)
     const eventPayload = {
       title: evtData.title,
       description: evtData.description,
       start_datetime: evtData.start,
       end_datetime: evtData.end,
-      color: calendars.find(c => c.id === evtData.calendar_id)?.color || undefined,
-      calendar_id: evtData.calendar_id,
-      is_appointment: !!evtData.is_appointment,
+      color: calendars.find(c => c.id === calendar_id)?.color || undefined,
+      calendar_id,
+      is_appointment,
       // Backend does not yet show invitee support in schema;
       // send invitees if provided (array of emails/usernames) as extra field (for future)
-      invitees: Array.isArray(evtData.invitees) ? evtData.invitees : (evtData.invitees ? [evtData.invitees] : []),
+      invitees: Array.isArray(evtData.invitees)
+        ? evtData.invitees
+        : evtData.invitees
+        ? typeof evtData.invitees === "string"
+          ? evtData.invitees.split(",").map((v) => v.trim()).filter(Boolean)
+          : [evtData.invitees]
+        : [],
     };
 
+    // Clean up unused invitees if empty
     if (!eventPayload.invitees || !eventPayload.invitees.length) {
       delete eventPayload.invitees;
+    }
+
+    if (!eventPayload.title || !eventPayload.start_datetime || !eventPayload.end_datetime || !eventPayload.calendar_id) {
+      // Required fields check
+      setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
+      return;
     }
 
     if (modalState.mode === "edit" && modalState.event && modalState.event.id) {
@@ -883,6 +918,7 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         if (!res.ok) throw new Error("Event update failed");
+        // Refetch events after update
         setTimeout(() => {
           setCurWeekStart(s => s);
         }, 0);
@@ -902,6 +938,7 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         if (!res.ok) throw new Error("Event create failed");
+        // Refetch after creation to update calendar
         setTimeout(() => {
           setCurWeekStart(s => s);
         }, 0);
