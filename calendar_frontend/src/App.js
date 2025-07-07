@@ -65,43 +65,96 @@ function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
 
   // Backend API Base
+  // API backend base configuration: allow override with REACT_APP_API_URL (preferred -- see README)
+  // Default to backend service running at port 3001 on the same domain as frontend, else fall back to cloud URL as last resort
   const API_BASE =
     process.env.REACT_APP_API_URL ||
-    "https://vscode-internal-149548-beta.beta01.cloud.kavia.ai:3001";
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:3001"
+      : "https://vscode-internal-149548-beta.beta01.cloud.kavia.ai:3001");
 
-  /** PUBLIC_INTERFACE */
+  /** PUBLIC_INTERFACE
+   * Logs in a user by contacting backend endpoint /auth/login.
+   * Throws error if credentials are invalid or network/connection fails.
+   */
   const login = async (email, password) => {
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        // 'same-origin' is preferred if frontend and backend are on same domain, 'include' if backend is on a different subdomain
+        credentials:
+          API_BASE.startsWith("http://localhost") ||
+          API_BASE.startsWith("http://127.0.0.1") ||
+          API_BASE.includes(window.location.hostname)
+            ? "same-origin"
+            : "include",
         body: JSON.stringify({ username: email, password }),
       });
-      if (!res.ok) throw new Error("Invalid credentials");
+      if (!res.ok) {
+        // Try to extract error detail from backend if present
+        let errMsg = "Invalid credentials";
+        try {
+          const errData = await res.json();
+          errMsg = errData?.detail || errMsg;
+        } catch (_e) {}
+        throw new Error(errMsg);
+      }
       setUser({ email });
     } catch (err) {
+      // Add more details for connection/network errors
+      if (err.name === "TypeError" && err.message.includes("fetch")) {
+        throw new Error(
+          "Could not connect to backend API. Please check your network connection or try again later."
+        );
+      }
       throw err;
     }
   };
 
-  /** PUBLIC_INTERFACE */
+  /** PUBLIC_INTERFACE
+   * Logs out the user in frontend (local session only).
+   */
   const logout = () => setUser(null);
 
-  /** PUBLIC_INTERFACE */
+  /** PUBLIC_INTERFACE
+   * Registers a user with backend, expects email and password.
+   * Throws error if registration fails (duplicate email, password rules, or network error).
+   */
   const register = async (email, password) => {
-    const res = await fetch(`${API_BASE}/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ username: email, password }),
-    });
-    if (res.ok) return true;
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(
-      errData?.detail ||
-        "Registration failed. Please try again with a different email."
-    );
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials:
+          API_BASE.startsWith("http://localhost") ||
+          API_BASE.startsWith("http://127.0.0.1") ||
+          API_BASE.includes(window.location.hostname)
+            ? "same-origin"
+            : "include",
+        body: JSON.stringify({ username: email, password }),
+      });
+      if (res.ok) return true;
+      let errData = {};
+      try {
+        errData = await res.json();
+      } catch (_e) {}
+      throw new Error(
+        errData?.detail ||
+          "Registration failed. Please try again with a different email."
+      );
+    } catch (err) {
+      if (err.name === "TypeError" && err.message.includes("fetch")) {
+        throw new Error(
+          "Could not contact backend API. Please check your network or backend service."
+        );
+      }
+      throw err;
+    }
   };
 
   return (
