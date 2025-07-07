@@ -74,24 +74,29 @@ function AuthProvider({ children }) {
       : "https://vscode-internal-149548-beta.beta01.cloud.kavia.ai:3001");
 
   /** PUBLIC_INTERFACE
-   * Logs in a user by contacting backend endpoint /auth/login.
+   * Logs in a user by contacting backend endpoint /auth/token (OAuth2 password flow).
    * Throws error if credentials are invalid or network/connection fails.
+   *
+   * FastAPI expects: POST /auth/token with form-urlencoded data (grant_type=password, username, password).
    */
   const login = async (email, password) => {
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await fetch(`${API_BASE}/auth/token`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/x-www-form-urlencoded"
         },
-        // 'same-origin' is preferred if frontend and backend are on same domain, 'include' if backend is on a different subdomain
         credentials:
           API_BASE.startsWith("http://localhost") ||
           API_BASE.startsWith("http://127.0.0.1") ||
           API_BASE.includes(window.location.hostname)
             ? "same-origin"
             : "include",
-        body: JSON.stringify({ username: email, password }),
+        body: new URLSearchParams({
+          grant_type: "password",
+          username: email,
+          password
+        }).toString(),
       });
       if (!res.ok) {
         // Try to extract error detail from backend if present
@@ -102,7 +107,11 @@ function AuthProvider({ children }) {
         } catch (_e) {}
         throw new Error(errMsg);
       }
-      setUser({ email });
+      // Backend returns: { access_token, token_type }
+      const data = await res.json();
+      // Optionally, store the JWT for later API calls
+      // localStorage.setItem("token", data.access_token);
+      setUser({ email }); // Set logged-in user
     } catch (err) {
       // Add more details for connection/network errors
       if (err.name === "TypeError" && err.message.includes("fetch")) {
