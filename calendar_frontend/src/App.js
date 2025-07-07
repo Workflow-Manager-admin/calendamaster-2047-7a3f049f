@@ -11,6 +11,7 @@ import {
   IconBell,
   IconCog,
 } from "./icons";
+import AuthCard from "./AuthCard";
 
 // PUBLIC_INTERFACE
 // Calendar Application root for enhanced week-view UI.
@@ -381,48 +382,97 @@ function LoginForm({ onLogin, onSwitchToRegister }) {
       setError("Email and password required");
     }
   };
+
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
-      <h2>Login</h2>
-      <label>
-        Email
-        <input
-          type="email"
-          value={email}
-          autoComplete="username"
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </label>
-      <label>
-        Password
-        <input
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </label>
-      {error && <div className="auth-error">{error}</div>}
-      <button type="submit" className="btn-primary">
-        Login
-      </button>
-      <button
-        type="button"
+    <AuthCard
+      title="Sign in"
+      subtitle="Access your calendar"
+      accent="var(--header-bg)"
+    >
+      <form
+        className="auth-form-v2"
         style={{
-          marginTop: "0.7em",
-          background: "none",
-          border: "none",
-          color: "#1976d2",
-          textDecoration: "underline",
-          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1em",
         }}
-        onClick={onSwitchToRegister}
+        onSubmit={handleSubmit}
+        autoComplete="on"
       >
-        Register a new account
-      </button>
-    </form>
+        <label className="auth-label">
+          <span className="auth-label-text">Email</span>
+          <input
+            className="auth-input"
+            type="email"
+            value={email}
+            autoComplete="username"
+            onChange={e => setEmail(e.target.value)}
+            required
+            placeholder="Enter your email"
+          />
+        </label>
+        <label className="auth-label">
+          <span className="auth-label-text">Password</span>
+          <input
+            className="auth-input"
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            onChange={e => setPassword(e.target.value)}
+            required
+            placeholder="Your password"
+          />
+        </label>
+        {error && (
+          <div className="auth-error" style={{ marginBottom: "0.2em" }}>
+            {error}
+          </div>
+        )}
+        <button
+          type="submit"
+          className="btn-primary auth-btn"
+          style={{
+            width: "100%",
+            marginTop: "0.3em",
+            padding: "10px 0",
+            borderRadius: "7px",
+            fontWeight: 700,
+            fontSize: "1.08em",
+            boxShadow: "0 1.5px 15px 0 #1976d212",
+            letterSpacing: ".02em",
+          }}
+        >
+          Login
+        </button>
+        <div
+          style={{
+            marginTop: "0.7em",
+            fontSize: "0.98em",
+            textAlign: "center",
+          }}
+        >
+          <span style={{ color: "#263b54" }}>Don&apos;t have an account?</span>{" "}
+          <button
+            type="button"
+            className="auth-link"
+            style={{
+              color: "var(--header-bg)",
+              background: "none",
+              border: "none",
+              textDecoration: "underline",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "1em",
+              marginLeft: "2px",
+              padding: 0,
+            }}
+            onClick={onSwitchToRegister}
+          >
+            Register
+          </button>
+        </div>
+      </form>
+    </AuthCard>
   );
 }
 
