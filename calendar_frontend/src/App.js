@@ -751,43 +751,38 @@ function App() {
     };
   }
 
-  // Fetch events for current week when curWeekStart, checkedCalendarIds, or user changes
-  useEffect(() => {
-    // Calculate year, month, day for weekly API
+  // Helper: explicit refetch function for events for THIS week
+  async function refetchCurrentWeekEvents() {
     const d = new Date(curWeekStart);
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const day = d.getDate();
-    // Only fetch for checked calendars; if none checked, setEvents([])
     if (!checkedCalendarIds.length || !user) {
       setEvents([]);
       return;
     }
-    // For now, fetch ALL week events and filter by checkedCalendarIds (backend has calendar_id for each event)
-    // Auth: Omit as JWT/auth not used, or add if token is implemented
-    fetch(
-      `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`,
-      {
-        credentials:
-          API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
-            ? "same-origin"
-            : "include",
-      }
-    )
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch events");
-        return res.json();
-      })
-      .then(data => {
-        // data is an array of EventOut; filter by calendar_id in checkedCalendarIds
-        const filtered = (data || []).filter(e => checkedCalendarIds.includes(e.calendar_id));
-        setEvents(filtered.map(mapApiEventToFrontend));
-      })
-      .catch(err => {
-        setEvents([]);
-        // Optionally show error or log
-        // console.error("Event fetch error", err);
-      });
+    try {
+      const res = await fetch(
+        `${API_BASE}/views/weekly?year=${year}&month=${month}&day=${day}`,
+        {
+          credentials:
+            API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+              ? "same-origin"
+              : "include",
+        }
+      );
+      if (!res.ok) throw new Error("Failed to fetch events");
+      const data = await res.json();
+      const filtered = (data || []).filter(e => checkedCalendarIds.includes(e.calendar_id));
+      setEvents(filtered.map(mapApiEventToFrontend));
+    } catch (err) {
+      setEvents([]);
+    }
+  }
+
+  // Fetch events for current week when curWeekStart, checkedCalendarIds, or user changes
+  useEffect(() => {
+    refetchCurrentWeekEvents();
     // eslint-disable-next-line
   }, [curWeekStart, checkedCalendarIds, user]); // refresh when week/calendars/user changes
 
@@ -940,8 +935,10 @@ function App() {
         if (!res.ok) throw new Error("Event create failed");
         // Await backend response before refreshing event list
         await res.json(); // ensure create fully completes
-        // Now refetch after creation to update calendar (make sure to close modal AFTER refetch to avoid timing bugs)
-        setCurWeekStart(s => s); // triggers useEffect for fetching
+
+        // Robust fix: Refetch events and update the list BEFORE closing modal
+        // This prevents a race condition where modal closes before new event appears
+        await refetchCurrentWeekEvents(); // custom async function, see below
       } catch (err) {
         // Optionally show error to user
       }
