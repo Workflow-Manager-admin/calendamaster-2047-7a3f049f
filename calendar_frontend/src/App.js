@@ -938,10 +938,10 @@ function App() {
           body: JSON.stringify(eventPayload)
         });
         if (!res.ok) throw new Error("Event create failed");
-        // Refetch after creation to update calendar
-        setTimeout(() => {
-          setCurWeekStart(s => s);
-        }, 0);
+        // Await backend response before refreshing event list
+        await res.json(); // ensure create fully completes
+        // Now refetch after creation to update calendar (make sure to close modal AFTER refetch to avoid timing bugs)
+        setCurWeekStart(s => s); // triggers useEffect for fetching
       } catch (err) {
         // Optionally show error to user
       }
