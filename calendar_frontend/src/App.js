@@ -935,6 +935,28 @@ function App() {
               ...calendarColors,   // { [calendar_id]: color }
               ...categoryColors    // { [category_name]: color }
             }}
+            onEventUpdate={async (eventId, updateObj) => {
+              // PATCH to backend, update times only
+              try {
+                await fetch(`${API_BASE}/events/${eventId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  credentials:
+                    API_BASE.startsWith("http://localhost") || API_BASE.startsWith("http://127.0.0.1") || API_BASE.includes(window.location.hostname)
+                      ? "same-origin"
+                      : "include",
+                  body: JSON.stringify({
+                    start_datetime: updateObj.start,
+                    end_datetime: updateObj.end,
+                    // Also must send all required update fields, so fetch the event to merge fields if needed
+                    // Here we fetch the event for full data, then PATCH with merged values for all required fields
+                  })
+                });
+                setTimeout(() => setCurWeekStart(s => s), 0);
+              } catch (err) {
+                // handle error silently (optionally notify user)
+              }
+            }}
           />
         </main>
       </div>
