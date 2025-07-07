@@ -1,104 +1,379 @@
-/* CSS Variables for Theme Management */
 :root {
-  /* Light theme colors */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --text-primary: #282c34;
-  --text-secondary: #61dafb;
-  --border-color: #e9ecef;
-  --button-bg: #007bff;
-  --button-text: #ffffff;
+  --primary: #1976d2;
+  --secondary: #424242;
+  --accent: #ffca28;
+  --sidebar-bg: #f5f7fa;
+  --main-bg: #fff;
+  --main-text: #1a1a1a;
+  --sidebar-border: #ececec;
+  --event-text: #fff;
+  --modal-bg: #fff;
+  --modal-shadow: rgba(40, 40, 40, 0.18) 0 12px 40px 0;
 }
-
 [data-theme="dark"] {
-  /* Dark theme colors */
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #282c34;
-  --text-primary: #ffffff;
-  --text-secondary: #61dafb;
-  --border-color: #404040;
-  --button-bg: #0056b3;
-  --button-text: #ffffff;
+  --sidebar-bg: #222;
+  --main-bg: #15181b;
+  --main-text: #fafafa;
+  --sidebar-border: #3b3c3f;
+  --modal-bg: #282c34;
 }
-
-.App {
-  text-align: center;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+body,
+#root {
   min-height: 100vh;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  background: var(--main-bg);
+  color: var(--main-text);
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
 }
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: var(--bg-secondary);
+.app-root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--main-bg);
+}
+.navbar {
+  background: var(--primary);
+  color: #fff;
+  padding: 0.7rem 2.2rem;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: var(--text-primary);
-  transition: background-color 0.3s ease;
+  font-weight: 500;
+  justify-content: space-between;
+}
+.navbar-title {
+  font-size: 1.45rem;
+  letter-spacing: 0.03em;
+}
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.theme-toggle-btn {
+  background: var(--secondary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 15px;
+  cursor: pointer;
+  font-size: 1.1em;
+  margin-right: 0.5em;
+  transition: background 0.17s;
+}
+.theme-toggle-btn:hover { background: var(--accent); color: #212121;}
+.navbar-user {font-size: 0.97em; opacity: 0.95;}
+.navbar-logout {
+  background: transparent;
+  color: #fff;
+  border: 1px solid #fff2;
+  border-radius: 5px;
+  padding: 3px 16px;
+  cursor: pointer;
+  margin-left: 6px;
+  font-size: 0.96em;
+  font-weight: 500;
+}
+.navbar-logout:hover { background: #fff1; }
+
+.calendar-layout {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: calc(100vh - 56px);
+  background: var(--main-bg);
+}
+.sidebar {
+  width: 220px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  padding: 0.7rem 0;
+}
+.sidebar-header {
+  font-size: 1.08em;
+  font-weight: 550;
+  padding: 0 1.1em 0.6em 1.1em;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  justify-content: space-between;
+}
+.sidebar-add-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.sidebar-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  flex: 1 1 auto;
+}
+.sidebar-item {
+  cursor: pointer;
+  padding: 0.63em 1.4em 0.63em 1.17em;
+  font-size: 1.02em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  border-left: 3px solid transparent;
+  transition: background 0.12s, border-color 0.2s;
+}
+.sidebar-item.selected {
+  background: #fbe7c540;
+  border-left: 3px solid var(--accent);
+}
+.sidebar-item:hover {background: #f5f5f7;}
+.sidebar-edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--secondary);
+  cursor: pointer;
+  font-size: 1em;
+  padding-left: 0.5em;
+  transition: color 0.13s;
+}
+.sidebar-edit-btn:hover {color: var(--primary); }
+.sidebar-color-bullet {
+  width: 1em;
+  height: 1em;
+  border-radius: 100%;
+  margin-right: 0.6em;
+  display: inline-block;
+  background: var(--category-color, var(--accent));
+  border: 2px solid #fff6;
+  box-shadow: 0 0 0 1.8px var(--accent);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.calendar-main {
+  flex: 1 1 auto;
+  padding: 1.3em;
+  background: var(--main-bg);
+  min-width: 0;
   position: relative;
 }
-
-.App-link {
-  color: var(--text-secondary);
-  transition: color 0.3s ease;
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  margin-bottom: 1em;
 }
-
-.theme-toggle {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background-color: var(--button-bg);
-  color: var(--button-text);
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 600;
+.calendar-toolbar button {
+  background: #fff4;
+  color: var(--primary);
+  border: 1px solid #dde2ed;
+  border-radius: 4px;
+  font-size: 0.99em;
+  font-weight: 500;
+  padding: 6px 18px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.calendar-toolbar button.active {
+  background: var(--primary); color: #fff;
+  border-color: var(--primary);
+}
+.calendar-toolbar-date {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.calendar-toolbar-date button {
+  padding: 2px 12px;
+  background: transparent;
+  border: 1px solid #c4c6cd;
+  border-radius: 3px;
+  font-size: 1.15em;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.theme-toggle:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  opacity: 0.9;
+.calendar-month-view {
+  background: var(--modal-bg);
+  border-radius: 13px;
+  box-shadow: 0 5px 32px -10px rgba(56,90,104,0.09);
+  padding: 0.7em 0.4em;
+}
+.calendar-weekdays, .calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.calendar-weekday {
+  text-align: center;
+  font-weight: 600;
+  padding: 0.5em 0 0.5em 0;
+  color: var(--secondary);
+  font-size: 1.01em;
+  letter-spacing: 0.04em;
+}
+.calendar-days-grid {
+  min-height: 420px;
+}
+.calendar-day {
+  cursor: pointer;
+  border: 1px solid #eee;
+  min-height: 75px;
+  padding: 3px 3px 2.6em 5px;
+  position: relative;
+  background: #fff;
+  transition: background 0.12s;
+  overflow: hidden;
+}
+.calendar-day.today {
+  background: #ffefc4;
+}
+.calendar-day.not-in-month {
+  color: #bbbbcc;
+  background: #faf9f7;
+}
+.calendar-day-num {
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.calendar-event-bullet {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 0.93em;
+  margin: 2px 0 0 0;
+  padding: 2px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: box-shadow 0.12s;
+  box-shadow: 0 1px 6px #0001;
+  font-weight: 600;
+  border-left: 5px solid var(--accent);
+  display: block;
+}
+.calendar-event-bullet:hover {
+  opacity: 0.91;
+  box-shadow: 0 2px 15px #1112;
+}
+.calendar-day-add {
+  position: absolute;
+  bottom: 3px; right: 10px;
+  background: none;
+  color: var(--primary);
+  border: none;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: color 0.12s;
+  padding: 0 3px;
+}
+.calendar-day-add:hover { color: var(--accent); }
+
+
+/* Modal */
+.modal-backdrop {
+  background: rgba(40,40,40,0.25);
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  background: var(--modal-bg);
+  min-width: 330px;
+  box-shadow: var(--modal-shadow);
+  border-radius: 10px;
+  padding: 2.2em 2.3em 1.6em 2.3em;
+  position: relative;
+}
+.modal-close-btn {
+  position: absolute;
+  top: 10px; right: 12px;
+  background: transparent;
+  color: #777;
+  font-size: 1.3em;
+  border: none;
+  cursor: pointer;
+}
+.event-form, .category-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+.event-form label, .category-form label {
+  font-size: 0.98em;
+  color: var(--secondary);
+  margin-bottom: 3px;
+}
+.event-form input, .event-form select, .category-form input, .event-form textarea {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1em;
+  outline: none;
+  background: var(--main-bg);
+  color: var(--main-text);
+}
+.event-form-actions, .category-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1em;
+}
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 27px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1.02em;
+  transition: background 0.14s;
+}
+.btn-primary:hover { background: var(--accent); color: #222;}
+/* Authentication Screen */
+.auth-screen {
+  min-height: 95vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--main-bg);
+}
+.auth-form {
+  background: var(--modal-bg);
+  box-shadow: 0 2px 40px -5px #4422;
+  padding: 2.7em 2.1em;
+  border-radius: 12px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1em;
+}
+.auth-form input[type="email"], .auth-form input[type="password"] {
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-size: 1em;
+}
+.auth-form button {
+  margin-top: 0.5em;
+}
+.auth-error {
+  color: #c00;
+  margin-bottom: 0.3em;
+  font-size: 0.92em;
+  letter-spacing: 0.01em;
 }
 
-.theme-toggle:active {
-  transform: translateY(0);
+/* Responsive Design */
+@media screen and (max-width: 700px) {
+  .calendar-layout {flex-direction: column;}
+  .sidebar {width: 100%; border-right: none; border-bottom: 2px solid var(--sidebar-border);}
+  .calendar-main {padding: 0.7em;}
+  .calendar-month-view {padding: 0.3em 0.1em;}
 }
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Responsive design for mobile */
-@media (max-width: 768px) {
-  .theme-toggle {
-    top: 10px;
-    right: 10px;
-    padding: 8px 16px;
-    font-size: 12px;
-  }
+@media screen and (max-width: 499px) {
+  .modal-content, .auth-form {padding: 1em 0.2em;}
+  .calendar-main {padding: 1px;}
 }
