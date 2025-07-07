@@ -7,10 +7,10 @@ import React from "react";
  *   days: Array of day objects { date: "2025-03-24", label: "Mon", isToday: bool }
  *   startHour: integer (e.g., 7)
  *   endHour: integer (e.g., 20)
- *   events: list of { id, title, start, end, category }
+ *   events: list of { id, title, start, end, category, calendar_id }
  *   onEventClick: fn(event)
  *   onSlotDoubleClick: fn(dateTime)
- *   categoryColors: map category->color
+ *   categoryColors: map calendar_id and category name -> color
  */
 const timeLabels = (startHour = 7, endHour = 20) => {
   const times = [];
@@ -89,14 +89,17 @@ function WeekView({
                     const [row, span] = getPosForEvent(event, startHour);
                     // Only render event card at first timeslot
                     if (row !== rowIdx) return null;
+                    // Pick color: calendar_id (preferred), fallback category name, fallback default
+                    const color =
+                      (event.calendar_id && categoryColors[event.calendar_id]) ||
+                      (event.category && categoryColors[event.category]) ||
+                      "var(--event-purple)";
                     return (
                       <div
                         className="weekview-event-card"
                         key={event.id}
                         style={{
-                          background:
-                            categoryColors[event.category] ||
-                            "var(--event-purple)",
+                          background: color,
                           gridRow: `span ${span}`,
                         }}
                         onClick={ev => {

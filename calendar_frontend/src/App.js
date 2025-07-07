@@ -42,7 +42,7 @@ const COLORS = {
  */
 function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCalendar }) {
   return (
-    <aside className="sidebar2" style={{borderRight: '2px solid var(--divider)', minHeight: 0}}>
+    <aside className="sidebar2" style={{ borderRight: '2px solid var(--divider)', minHeight: 0 }}>
       <div className="sidebar2-user">
         <img
           className="sidebar2-avatar"
@@ -51,36 +51,39 @@ function SidebarCalendarCheckboxes({ calendars, checkedCalendarIds, onToggleCale
         />
         <span className="sidebar2-username">My Name</span>
       </div>
-      <div className="sidebar2-menu" style={{marginBottom:8}}>
-        <div className="sidebar2-section-title" style={{marginTop:14, marginBottom:10}}>CALENDARS</div>
-        <ul style={{listStyle:'none', margin:0, padding:0}}>
+      <div className="sidebar2-menu" style={{ marginBottom: 8 }}>
+        <div className="sidebar2-section-title" style={{ marginTop: 14, marginBottom: 10 }}>CALENDARS</div>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {calendars.map(cal => (
             <li
               key={cal.id}
               className="sidebar2-item"
               tabIndex={0}
-              style={{padding: '6px 17px 6px 28px'}}
+              style={{ padding: '6px 17px 6px 28px' }}
             >
               <input
                 type="checkbox"
                 checked={checkedCalendarIds.includes(cal.id)}
                 onChange={() => onToggleCalendar(cal.id)}
-                style={{marginRight:12, accentColor: cal.color}}
+                style={{
+                  marginRight: 12,
+                  accentColor: cal.color || "#1976d2", // fallback to blue
+                }}
                 aria-label={`Show/hide ${cal.name}`}
                 id={`calbox-${cal.id}`}
               />
               <span
                 style={{
-                  display:'inline-block',
+                  display: 'inline-block',
                   width: '12px',
                   height: '12px',
-                  borderRadius:6,
-                  background: cal.color,
-                  marginRight:8,
+                  borderRadius: 6,
+                  background: cal.color || "#1976d2",
+                  marginRight: 8,
                   border: '1.5px solid #c9d6e2'
                 }}
               />
-              <label htmlFor={`calbox-${cal.id}`} style={{cursor:'pointer', userSelect:'none'}}>
+              <label htmlFor={`calbox-${cal.id}`} style={{ cursor: 'pointer', userSelect: 'none' }}>
                 {cal.name}
               </label>
             </li>
@@ -857,7 +860,7 @@ function App() {
   const visibleEvents = events.filter(evt => checkedCalendarIds.includes(evt.calendar_id));
 
   // Map calendar id->color
-  const calendarColorMap = Object.fromEntries(calendars.map(c => [c.id, c.color]));
+  const calendarColors = Object.fromEntries(calendars.map(c => [c.id, c.color]));
   // category (for compatibility): maps category name to color
   const categoryColors = Object.fromEntries(calendars.map(c => [c.name, c.color]));
 
@@ -924,7 +927,11 @@ function App() {
             events={visibleEvents}
             onEventClick={handleEditEvent}
             onSlotDoubleClick={handleSlotDoubleClick}
-            categoryColors={categoryColors}
+            // Give both id->color and name->color for compatibility (event.calendar_id is preferred)
+            categoryColors={{
+              ...calendarColors,   // { [calendar_id]: color }
+              ...categoryColors    // { [category_name]: color }
+            }}
           />
         </main>
       </div>
