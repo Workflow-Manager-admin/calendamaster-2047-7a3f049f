@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import RegisterForm from "./RegisterForm";
 import WeekView from "./WeekView";
+import EventAppointmentModal from "./EventAppointmentModal";
 import {
   IconCalendar,
   IconContacts,
@@ -705,8 +706,8 @@ function App() {
   ]);
 
 
-  // Modal (event editing)
-  const [modalState, setModalState] = useState({ open: false, event: null, mode: null });
+  // Modal (event editing/creation, for both regular events and appointments)
+  const [modalState, setModalState] = useState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
 
   // Auth overlays
   if (!user) {
@@ -748,31 +749,57 @@ function App() {
 
   // Handler: event click/edit
   const handleEditEvent = (event) => {
-    setModalState({ open: true, event, mode: "edit" });
+    // Normalize invitees if undefined (for legacy events)
+    setModalState({ open: true, event, mode: "edit", slotStart: event.start, slotEnd: event.end });
   };
 
-  // Handler: double click slot to add new event
+  // Handler: double click slot to add new event/appointment
   const handleSlotDoubleClick = (datetime) => {
+    // Default end: +1 hour (use ISO 8601 input types)
+    let endHour = parseInt(datetime.slice(11, 13), 10) + 1;
+    if (endHour > 23) endHour = 23;
+    const slotEnd = datetime.slice(0, 11) + String(endHour).padStart(2, "0") + datetime.slice(13, 16) + ":00";
     setModalState({
       open: true,
-      event: {
-        start: datetime,
-        end: datetime.slice(0, 11) + (parseInt(datetime.slice(11, 13), 10) + 1).toString().padStart(2, "0") + ":00",
-        category: calendars[0]?.name || "",
-        calendar_id: calendars[0]?.id || 1,
-      },
-      mode: "add"
+      event: null,
+      mode: "add",
+      slotStart: datetime,
+      slotEnd: slotEnd
     });
   };
 
-  // Handler: save/add/edit event
+  // Handler: save/add/edit event or appointment
   const handleSaveEvent = (evtData) => {
+    // If editing: update; else create new with unique id and add appointment fields
     if (modalState.mode === "edit" && modalState.event) {
-      setEvents(evts => evts.map(e => e.id === modalState.event.id ? { ...e, ...evtData } : e));
+      setEvents(evts =>
+        evts.map(e =>
+          e.id === modalState.event.id
+            ? {
+                ...e,
+                ...evtData,
+                id: e.id,
+                calendar_id: evtData.calendar_id,
+                start: evtData.start,
+                end: evtData.end,
+                invitees: evtData.invitees,
+                is_appointment: evtData.is_appointment
+              }
+            : e
+        )
+      );
     } else {
-      setEvents(evts => [...evts, { ...evtData, id: Math.max(...evts.map(e => e.id), 0) + 1 }]);
+      setEvents(evts => [
+        ...evts,
+        {
+          ...evtData,
+          id: Math.max(...evts.map(e => e.id), 0) + 1,
+          invitees: evtData.invitees,
+          is_appointment: evtData.is_appointment
+        }
+      ]);
     }
-    setModalState({ open: false, event: null, mode: null });
+    setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" });
   };
 
   // Filter events only for visible ("checked") calendars
@@ -850,13 +877,15 @@ function App() {
           />
         </main>
       </div>
-      {/* Event edit modal (reuse previous EventModal if customized) */}
-      <EventModal
+      {/* Event/Appointment modal (create or edit) */}
+      <EventAppointmentModal
         open={modalState.open}
         event={modalState.event}
-        onClose={() => setModalState({ open: false, event: null, mode: null })}
+        onClose={() => setModalState({ open: false, event: null, mode: null, slotStart: "", slotEnd: "" })}
         onSave={handleSaveEvent}
         categories={calendars}
+        defaultStart={modalState.mode === "add" ? modalState.slotStart : undefined}
+        defaultEnd={modalState.mode === "add" ? modalState.slotEnd : undefined}
       />
     </div>
   );
